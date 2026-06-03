@@ -34,8 +34,8 @@ export function AIChatPane({
   };
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col border-r border-border bg-secondary/40">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-primary/10 px-4">
+    <section className="flex min-w-0 flex-1 flex-col border-r border-border bg-background">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-primary/20 bg-primary/10 px-4">
         <Bot aria-hidden className="size-4 shrink-0 text-primary" />
         <h2 className="truncate text-sm font-semibold text-foreground">
           AIチャット
