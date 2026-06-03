@@ -19,6 +19,15 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // CS アシスタント用: フェーズ・相談種別・優先度
+        "phase-onboarding": "bg-chart-3/15 text-chart-3 dark:bg-chart-3/20",
+        "phase-adoption": "bg-chart-1/15 text-chart-1 dark:bg-chart-1/20",
+        "phase-success": "bg-chart-2/15 text-chart-2 dark:bg-chart-2/20",
+        "consultation-issue": "bg-chart-5/15 text-chart-5 dark:bg-chart-5/20",
+        "consultation-action": "bg-chart-1/15 text-chart-1 dark:bg-chart-1/20",
+        "priority-high": "bg-destructive/10 text-destructive dark:bg-destructive/20",
+        "priority-medium": "bg-chart-3/15 text-chart-3 dark:bg-chart-3/20",
+        "priority-low": "bg-muted text-muted-foreground",
       },
       size: {
         default: "h-5 px-2 text-xs",

@@ -1,0 +1,37 @@
+[
+  {
+    "id": "cons-1",
+    "customerId": "cust-abc",
+    "date": "2025/05/12",
+    "type": "issue",
+    "summary": "初期設定の進捗と課題について"
+  },
+  {
+    "id": "cons-2",
+    "customerId": "cust-abc",
+    "date": "2025/05/26",
+    "type": "action",
+    "summary": "データ連携の要件整理を実施"
+  },
+  {
+    "id": "cons-3",
+    "customerId": "cust-abc",
+    "date": "2025/06/02",
+    "type": "action",
+    "summary": "利用トレーニングの実施報告"
+  },
+  {
+    "id": "cons-4",
+    "customerId": "cust-def",
+    "date": "2025/05/20",
+    "type": "issue",
+    "summary": "シフト作成の定着状況を確認"
+  },
+  {
+    "id": "cons-5",
+    "customerId": "cust-def",
+    "date": "2025/05/28",
+    "type": "action",
+    "summary": "管理者向け活用Tipsを共有"
+  }
+]

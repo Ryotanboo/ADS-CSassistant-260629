@@ -1,0 +1,22 @@
+[
+  {
+    "id": "msg-1",
+    "customerId": "cust-abc",
+    "role": "assistant",
+    "content": "今日はどの顧客について話しますか？現状を教えてください"
+  },
+  {
+    "id": "msg-2",
+    "customerId": "cust-abc",
+    "role": "user",
+    "content": "株式会社ABCの担当者から機能要望をもらったのですが、どう対応すべきか悩んでいます",
+    "timestamp": "10:32"
+  },
+  {
+    "id": "msg-3",
+    "customerId": "cust-abc",
+    "role": "assistant",
+    "content": "なるほど、機能要望ですね。その要望が実現する場合、リリーススケジュールや他の顧客への影響はありますか？",
+    "timestamp": "10:33"
+  }
+]

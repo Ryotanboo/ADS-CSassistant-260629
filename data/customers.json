@@ -1,0 +1,58 @@
+[
+  {
+    "id": "cust-abc",
+    "name": "株式会社ABC",
+    "phase": "onboarding",
+    "contractStartDate": "2025年4月1日",
+    "accountManager": "山田 太郎"
+  },
+  {
+    "id": "cust-def",
+    "name": "株式会社DEF",
+    "phase": "adoption",
+    "contractStartDate": "2024年11月15日",
+    "accountManager": "佐藤 花子"
+  },
+  {
+    "id": "cust-ghi",
+    "name": "株式会社GHI",
+    "phase": "success",
+    "contractStartDate": "2024年6月1日",
+    "accountManager": "山田 太郎"
+  },
+  {
+    "id": "cust-jkl",
+    "name": "株式会社JKL",
+    "phase": "success",
+    "contractStartDate": "2024年3月10日",
+    "accountManager": "鈴木 一郎"
+  },
+  {
+    "id": "cust-mno",
+    "name": "株式会社MNO",
+    "phase": "adoption",
+    "contractStartDate": "2025年1月20日",
+    "accountManager": "佐藤 花子"
+  },
+  {
+    "id": "cust-pqr",
+    "name": "株式会社PQR",
+    "phase": "success",
+    "contractStartDate": "2023年9月5日",
+    "accountManager": "山田 太郎"
+  },
+  {
+    "id": "cust-stu",
+    "name": "株式会社STU",
+    "phase": "success",
+    "contractStartDate": "2023年12月18日",
+    "accountManager": "鈴木 一郎"
+  },
+  {
+    "id": "cust-vwx",
+    "name": "株式会社VWX",
+    "phase": "success",
+    "contractStartDate": "2024年8月22日",
+    "accountManager": "佐藤 花子"
+  }
+]

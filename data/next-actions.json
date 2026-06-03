@@ -1,0 +1,30 @@
+[
+  {
+    "id": "action-1",
+    "customerId": "cust-abc",
+    "label": "機能要望の背景ニーズを確認する",
+    "priority": "high",
+    "completed": true
+  },
+  {
+    "id": "action-2",
+    "customerId": "cust-abc",
+    "label": "リリーススケジュールへの影響を確認",
+    "priority": "high",
+    "completed": false
+  },
+  {
+    "id": "action-3",
+    "customerId": "cust-abc",
+    "label": "感情面でのフォローアップを検討",
+    "priority": "medium",
+    "completed": false
+  },
+  {
+    "id": "action-4",
+    "customerId": "cust-abc",
+    "label": "担当者と次回MTGを設定",
+    "priority": "medium",
+    "completed": false
+  }
+]
