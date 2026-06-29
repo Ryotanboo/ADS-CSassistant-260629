@@ -8,7 +8,7 @@
  * - Pane 3: AIChatPane — 上司役AIとの1-on-1対話（チャット形式）
  * - Pane 4: NextActionPane — チェックボックス付きネクストアクション一覧
  *
- * フェーズ1: 画面の見た目のみ。データ保存・AI連携はなし。
+ * フェーズ2: Neon DB連携。操作はServer Actionsを通じてDBに保存。
  * 仕様: docs/design-decisions.md
  */
 
@@ -26,6 +26,13 @@ import { CustomerListPane } from "@/components/cs/CustomerListPane";
 import { CustomerSummaryPane } from "@/components/cs/CustomerSummaryPane";
 import { AIChatPane } from "@/components/cs/AIChatPane";
 import { NextActionPane } from "@/components/cs/NextActionPane";
+import {
+  addCustomerAction,
+  addNextActionAction,
+  toggleNextActionAction,
+  deleteNextActionAction,
+  addChatMessageAction,
+} from "@/app/cs/actions";
 
 type CsWorkspaceProps = {
   initialCustomers: Customer[];
@@ -86,8 +93,10 @@ export function CsWorkspace({
         contractStartDate: "—",
         accountManager: workspace.currentUser.name,
       };
+      // 楽観的更新: UIを即時反映してからDBに保存
       setCustomers((prev) => [...prev, newCustomer]);
       setSelectedCustomerId(newCustomer.id);
+      addCustomerAction(newCustomer).catch(console.error);
     },
     [workspace.currentUser.name],
   );
@@ -100,16 +109,15 @@ export function CsWorkspace({
         minute: "2-digit",
         hour12: false,
       });
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `msg-${Date.now()}`,
-          customerId: activeCustomer.id,
-          role: "user",
-          content,
-          timestamp,
-        },
-      ]);
+      const message: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        customerId: activeCustomer.id,
+        role: "user",
+        content,
+        timestamp,
+      };
+      setChatMessages((prev) => [...prev, message]);
+      addChatMessageAction(message).catch(console.error);
     },
     [activeCustomer],
   );
@@ -121,43 +129,43 @@ export function CsWorkspace({
       minute: "2-digit",
       hour12: false,
     });
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: `msg-${Date.now()}`,
-        customerId: activeCustomer.id,
-        role: "assistant",
-        content: GRILL_ME_PROMPT,
-        timestamp,
-      },
-    ]);
+    const message: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      customerId: activeCustomer.id,
+      role: "assistant",
+      content: GRILL_ME_PROMPT,
+      timestamp,
+    };
+    setChatMessages((prev) => [...prev, message]);
+    addChatMessageAction(message).catch(console.error);
   }, [activeCustomer]);
 
   const toggleAction = useCallback((id: string, completed: boolean) => {
     setNextActions((prev) =>
       prev.map((a) => (a.id === id ? { ...a, completed } : a)),
     );
+    toggleNextActionAction(id, completed).catch(console.error);
   }, []);
 
   const addAction = useCallback(
     (label: string) => {
       if (!activeCustomer) return;
-      setNextActions((prev) => [
-        ...prev,
-        {
-          id: `action-${Date.now()}`,
-          customerId: activeCustomer.id,
-          label,
-          priority: "medium",
-          completed: false,
-        },
-      ]);
+      const action: NextAction = {
+        id: `action-${Date.now()}`,
+        customerId: activeCustomer.id,
+        label,
+        priority: "medium",
+        completed: false,
+      };
+      setNextActions((prev) => [...prev, action]);
+      addNextActionAction(action).catch(console.error);
     },
     [activeCustomer],
   );
 
   const deleteAction = useCallback((id: string) => {
     setNextActions((prev) => prev.filter((a) => a.id !== id));
+    deleteNextActionAction(id).catch(console.error);
   }, []);
 
   if (!activeCustomer) {
