@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
   outputFileTracingRoot: projectRoot,
+  async redirects() {
+    return [
+      {
+        source: "/",
+        destination: "/cs",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
