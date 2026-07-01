@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Bot, Lightbulb, Send, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertCircle, Bot, Lightbulb, Loader2, Send, Sparkles } from "lucide-react";
 
 import { type ChatMessage } from "@/lib/cs-schema";
 import { cn } from "@/lib/utils";
@@ -17,18 +17,30 @@ type AIChatPaneProps = {
   messages: ChatMessage[];
   onSendMessage: (content: string) => void;
   onStartGrillMe: () => void;
+  isLoading?: boolean;
+  streamingContent?: string;
+  errorMessage?: string | null;
 };
 
 export function AIChatPane({
   messages,
   onSendMessage,
   onStartGrillMe,
+  isLoading = false,
+  streamingContent,
+  errorMessage,
 }: AIChatPaneProps) {
   const [draft, setDraft] = useState("");
+  const scrollBottomRef = useRef<HTMLDivElement>(null);
+
+  // 新しいメッセージ追加・ストリーミング更新時に最下部へスクロール
+  useEffect(() => {
+    scrollBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, streamingContent]);
 
   const handleSend = () => {
     const trimmed = draft.trim();
-    if (!trimmed) return;
+    if (!trimmed || isLoading) return;
     onSendMessage(trimmed);
     setDraft("");
   };
@@ -63,6 +75,18 @@ export function AIChatPane({
             {messages.map((message) => (
               <ChatBubble key={message.id} message={message} />
             ))}
+
+            {/* ストリーミング中のAI応答バブル */}
+            {isLoading && (
+              <StreamingBubble content={streamingContent} />
+            )}
+
+            {/* エラー表示 */}
+            {errorMessage && !isLoading && (
+              <ErrorBubble message={errorMessage} />
+            )}
+
+            <div ref={scrollBottomRef} />
           </div>
         </ScrollArea>
 
@@ -75,6 +99,7 @@ export function AIChatPane({
               placeholder="メッセージを入力してください..."
               rows={2}
               aria-label="メッセージを入力"
+              disabled={isLoading}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
@@ -83,15 +108,21 @@ export function AIChatPane({
               }}
             />
             <InputGroupAddon align="block-end" className="justify-end pb-2">
-              <InputGroupButton
-                variant="default"
-                size="icon-sm"
-                onClick={handleSend}
-                disabled={!draft.trim()}
-                aria-label="送信（Cmd+Enter）"
-              >
-                <Send aria-hidden />
-              </InputGroupButton>
+              {isLoading ? (
+                <div className="flex size-7 items-center justify-center">
+                  <Loader2 aria-hidden className="size-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <InputGroupButton
+                  variant="default"
+                  size="icon-sm"
+                  onClick={handleSend}
+                  disabled={!draft.trim()}
+                  aria-label="送信（Cmd+Enter）"
+                >
+                  <Send aria-hidden />
+                </InputGroupButton>
+              )}
             </InputGroupAddon>
           </InputGroup>
 
@@ -99,9 +130,10 @@ export function AIChatPane({
           <button
             type="button"
             onClick={onStartGrillMe}
+            disabled={isLoading}
             className={cn(
               "flex items-center gap-3 rounded-xl bg-primary px-4 py-3 text-left transition-opacity",
-              "hover:opacity-90",
+              "hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50",
               "outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
             )}
           >
@@ -113,7 +145,7 @@ export function AIChatPane({
                 何から話せばいいか分からない
               </span>
               <span className="text-xs text-white/70">
-                例を見て、話し始めるきっかけをつかみましょう
+                AIが最初の問いかけをしてくれます
               </span>
             </div>
           </button>
@@ -149,7 +181,7 @@ function ChatBubble({ message }: { message: ChatMessage }) {
       >
         <div
           className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
             isUser
               ? "rounded-tr-sm bg-primary text-primary-foreground"
               : "rounded-tl-sm bg-card text-foreground ring-1 ring-border",
@@ -162,6 +194,52 @@ function ChatBubble({ message }: { message: ChatMessage }) {
             {message.timestamp}
           </time>
         )}
+      </div>
+    </div>
+  );
+}
+
+function StreamingBubble({ content }: { content?: string }) {
+  return (
+    <div className="flex gap-3">
+      <div
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15"
+        aria-hidden
+      >
+        <Bot className="size-4 text-primary" />
+      </div>
+      <div className="flex max-w-[82%] flex-col gap-1 items-start">
+        <div className="rounded-2xl rounded-tl-sm bg-card px-4 py-2.5 text-sm leading-relaxed ring-1 ring-border text-foreground whitespace-pre-wrap">
+          {content ? (
+            <>
+              {content}
+              <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-primary align-text-bottom" />
+            </>
+          ) : (
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <Loader2 aria-hidden className="size-3.5 animate-spin" />
+              考えています…
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ErrorBubble({ message }: { message: string }) {
+  return (
+    <div className="flex gap-3">
+      <div
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-destructive/15"
+        aria-hidden
+      >
+        <AlertCircle className="size-4 text-destructive" />
+      </div>
+      <div className="flex max-w-[82%] flex-col gap-1 items-start">
+        <div className="rounded-2xl rounded-tl-sm bg-destructive/10 px-4 py-2.5 text-sm leading-relaxed ring-1 ring-destructive/30 text-destructive">
+          {message}
+        </div>
       </div>
     </div>
   );

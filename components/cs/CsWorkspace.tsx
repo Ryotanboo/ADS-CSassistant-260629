@@ -5,14 +5,16 @@
  *
  * - Pane 1: CustomerListPane — 担当顧客一覧・フェーズ表示・検索
  * - Pane 2: CustomerSummaryPane — 選択顧客の基本情報・相談履歴タイムライン
- * - Pane 3: AIChatPane — 上司役AIとの1-on-1対話（チャット形式）
+ * - Pane 3: AIChatPane — 上司役AIとの1-on-1対話（チャット形式・Gemini API連携）
  * - Pane 4: NextActionPane — チェックボックス付きネクストアクション一覧
  *
- * フェーズ2: Neon DB連携。操作はServer Actionsを通じてDBに保存。
+ * フェーズ3: Gemini AI統合。
+ * - sendMessage: ユーザーメッセージをDBへ保存後、Gemini APIをストリーミング呼び出し
+ * - startGrillMe: Grill Meプロンプトでセッション開始
  * 仕様: docs/design-decisions.md
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   type ChatMessage,
@@ -21,6 +23,7 @@ import {
   type Customer,
   type NextAction,
 } from "@/lib/cs-schema";
+import { GRILL_ME_FIRST_MESSAGE } from "@/lib/cs-ai-prompt";
 import { CsGlobalHeader } from "@/components/cs/CsGlobalHeader";
 import { CustomerListPane } from "@/components/cs/CustomerListPane";
 import { CustomerSummaryPane } from "@/components/cs/CustomerSummaryPane";
@@ -42,8 +45,13 @@ type CsWorkspaceProps = {
   workspace: CsWorkspaceType;
 };
 
-const GRILL_ME_PROMPT =
-  "では、まずその顧客との関係性はどうですか？最近のやり取りで気になっていることはありますか？";
+function nowTimestamp() {
+  return new Date().toLocaleTimeString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
 
 export function CsWorkspace({
   initialCustomers,
@@ -61,6 +69,13 @@ export function CsWorkspace({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
     initialCustomers[0]?.id ?? "",
   );
+
+  // AIチャット用の状態
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string>("");
+  const [aiError, setAiError] = useState<string | null>(null);
+  // 同時送信を防ぐ ref（stateより即時性がある）
+  const isFetchingRef = useRef(false);
 
   const activeCustomer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
@@ -93,7 +108,6 @@ export function CsWorkspace({
         contractStartDate: "—",
         accountManager: workspace.currentUser.name,
       };
-      // 楽観的更新: UIを即時反映してからDBに保存
       setCustomers((prev) => [...prev, newCustomer]);
       setSelectedCustomerId(newCustomer.id);
       addCustomerAction(newCustomer).catch(console.error);
@@ -101,43 +115,133 @@ export function CsWorkspace({
     [workspace.currentUser.name],
   );
 
+  /**
+   * Gemini API をストリーミングで呼び出し、AIの返答をリアルタイム表示する。
+   * 完了後、AIメッセージを DBに保存する。
+   */
+  const callAiStream = useCallback(
+    async (
+      messagesWithUser: ChatMessage[],
+      customer: Customer,
+    ) => {
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+      setIsAiLoading(true);
+      setStreamingContent("");
+      setAiError(null);
+
+      let fullContent = "";
+
+      try {
+        const res = await fetch("/api/cs/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customer, messages: messagesWithUser }),
+        });
+
+        if (!res.ok || !res.body) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            (data as { error?: string }).error ??
+              "AIとの通信に失敗しました。しばらくしてからお試しください。",
+          );
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") break;
+            try {
+              const chunk = JSON.parse(payload) as string | { error: string };
+              if (typeof chunk === "string") {
+                fullContent += chunk;
+                setStreamingContent(fullContent);
+              } else if (chunk.error) {
+                throw new Error(chunk.error);
+              }
+            } catch {
+              // JSON パースエラーは無視して継続
+            }
+          }
+        }
+
+        if (!fullContent) {
+          throw new Error("AIから返答が得られませんでした。");
+        }
+
+        // ストリーミング完了 → AIメッセージを確定してDBに保存
+        const aiMessage: ChatMessage = {
+          id: `msg-${Date.now()}`,
+          customerId: customer.id,
+          role: "assistant",
+          content: fullContent,
+          timestamp: nowTimestamp(),
+        };
+        setChatMessages((prev) => [...prev, aiMessage]);
+        addChatMessageAction(aiMessage).catch(console.error);
+      } catch (err) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "AIとの通信中にエラーが発生しました。";
+        setAiError(msg);
+      } finally {
+        setIsAiLoading(false);
+        setStreamingContent("");
+        isFetchingRef.current = false;
+      }
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
     (content: string) => {
-      if (!activeCustomer) return;
-      const timestamp = new Date().toLocaleTimeString("ja-JP", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-      const message: ChatMessage = {
+      if (!activeCustomer || isFetchingRef.current) return;
+
+      const userMessage: ChatMessage = {
         id: `msg-${Date.now()}`,
         customerId: activeCustomer.id,
         role: "user",
         content,
-        timestamp,
+        timestamp: nowTimestamp(),
       };
-      setChatMessages((prev) => [...prev, message]);
-      addChatMessageAction(message).catch(console.error);
+
+      // 楽観的更新 + DB保存
+      const updatedMessages = [...customerMessages, userMessage];
+      setChatMessages((prev) => [...prev, userMessage]);
+      addChatMessageAction(userMessage).catch(console.error);
+
+      // Gemini API 呼び出し
+      callAiStream(updatedMessages, activeCustomer).catch(console.error);
     },
-    [activeCustomer],
+    [activeCustomer, customerMessages, callAiStream],
   );
 
   const startGrillMe = useCallback(() => {
-    if (!activeCustomer) return;
-    const timestamp = new Date().toLocaleTimeString("ja-JP", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    const message: ChatMessage = {
+    if (!activeCustomer || isFetchingRef.current) return;
+
+    // Grill Me: AIからの最初の問いかけをすぐ表示（DB保存も）
+    const grillMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       customerId: activeCustomer.id,
       role: "assistant",
-      content: GRILL_ME_PROMPT,
-      timestamp,
+      content: GRILL_ME_FIRST_MESSAGE,
+      timestamp: nowTimestamp(),
     };
-    setChatMessages((prev) => [...prev, message]);
-    addChatMessageAction(message).catch(console.error);
+    setChatMessages((prev) => [...prev, grillMessage]);
+    addChatMessageAction(grillMessage).catch(console.error);
   }, [activeCustomer]);
 
   const toggleAction = useCallback((id: string, completed: boolean) => {
@@ -195,6 +299,9 @@ export function CsWorkspace({
           messages={customerMessages}
           onSendMessage={sendMessage}
           onStartGrillMe={startGrillMe}
+          isLoading={isAiLoading}
+          streamingContent={streamingContent}
+          errorMessage={aiError}
         />
         <NextActionPane
           key={`actions-${activeCustomer.id}`}

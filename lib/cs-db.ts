@@ -177,7 +177,8 @@ export async function getChatMessages(customerId: string): Promise<ChatMessage[]
     customerId: r.customer_id as string,
     role: r.role as ChatMessage["role"],
     content: r.content as string,
-    timestamp: r.timestamp as string | undefined,
+    // DB の NULL を undefined に正規化（Zod の z.string().optional() は null を拒否する）
+    timestamp: r.timestamp != null ? (r.timestamp as string) : undefined,
   }));
 }
 
@@ -193,7 +194,7 @@ export async function getAllChatMessages(): Promise<ChatMessage[]> {
     customerId: r.customer_id as string,
     role: r.role as ChatMessage["role"],
     content: r.content as string,
-    timestamp: r.timestamp as string | undefined,
+    timestamp: r.timestamp != null ? (r.timestamp as string) : undefined,
   }));
 }
 
