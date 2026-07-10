@@ -6,11 +6,18 @@ import {
 
 export function phaseBadgeVariant(
   phase: CustomerPhase,
-): "phase-onboarding" | "phase-adoption" | "phase-success" {
+):
+  | "phase-free-trial"
+  | "phase-onboarding"
+  | "phase-adoption"
+  | "phase-success"
+  | "phase-churn-risk" {
   const map = {
+    freeTrial: "phase-free-trial",
     onboarding: "phase-onboarding",
     adoption: "phase-adoption",
     success: "phase-success",
+    churnRisk: "phase-churn-risk",
   } as const;
   return map[phase];
 }

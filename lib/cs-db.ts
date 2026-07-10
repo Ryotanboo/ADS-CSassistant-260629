@@ -12,6 +12,7 @@
 import { neon } from "@neondatabase/serverless";
 import type {
   ChatMessage,
+  Consultation,
   Customer,
   NextAction,
 } from "@/lib/cs-schema";
@@ -58,6 +59,22 @@ export async function initTables() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS consultations (
+      id TEXT PRIMARY KEY,
+      customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      date TEXT NOT NULL,
+      type TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      transcript JSONB,
+      archived BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`
+    ALTER TABLE consultations
+    ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE
+  `;
 }
 
 // ─────────────────────────────────────────────
@@ -93,7 +110,9 @@ export async function insertCustomer(c: Customer): Promise<void> {
 // next_actions
 // ─────────────────────────────────────────────
 
-export async function getNextActions(customerId: string): Promise<NextAction[]> {
+export async function getNextActions(
+  customerId: string,
+): Promise<NextAction[]> {
   const sql = getDb();
   const rows = await sql`
     SELECT id, customer_id, label, priority, completed
@@ -164,7 +183,9 @@ export async function updateNextActionCompleted(
 // chat_messages
 // ─────────────────────────────────────────────
 
-export async function getChatMessages(customerId: string): Promise<ChatMessage[]> {
+export async function getChatMessages(
+  customerId: string,
+): Promise<ChatMessage[]> {
   const sql = getDb();
   const rows = await sql`
     SELECT id, customer_id, role, content, timestamp
@@ -205,4 +226,103 @@ export async function insertChatMessage(m: ChatMessage): Promise<void> {
     VALUES (${m.id}, ${m.customerId}, ${m.role}, ${m.content}, ${m.timestamp ?? null})
     ON CONFLICT (id) DO NOTHING
   `;
+}
+
+export async function deleteChatMessagesByIds(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+
+  const sql = getDb();
+  await Promise.all(
+    ids.map((id) => sql`DELETE FROM chat_messages WHERE id = ${id}`),
+  );
+}
+
+// ─────────────────────────────────────────────
+// consultations
+// ─────────────────────────────────────────────
+
+function parseTranscript(value: unknown): ChatMessage[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  return value.flatMap((item) => {
+    if (
+      typeof item === "object" &&
+      item !== null &&
+      "id" in item &&
+      "customerId" in item &&
+      "role" in item &&
+      "content" in item
+    ) {
+      const message = item as Partial<ChatMessage>;
+      if (
+        typeof message.id === "string" &&
+        typeof message.customerId === "string" &&
+        (message.role === "user" || message.role === "assistant") &&
+        typeof message.content === "string"
+      ) {
+        return [
+          {
+            id: message.id,
+            customerId: message.customerId,
+            role: message.role,
+            content: message.content,
+            timestamp:
+              typeof message.timestamp === "string"
+                ? message.timestamp
+                : undefined,
+          },
+        ];
+      }
+    }
+    return [];
+  });
+}
+
+export async function getAllConsultations(): Promise<Consultation[]> {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT id, customer_id, date, type, summary, transcript, archived
+    FROM consultations
+    WHERE archived IS NOT TRUE
+    ORDER BY created_at ASC
+  `;
+  return rows.map((r) => ({
+    id: r.id as string,
+    customerId: r.customer_id as string,
+    date: r.date as string,
+    type: r.type as Consultation["type"],
+    summary: r.summary as string,
+    transcript: parseTranscript(r.transcript),
+    archived: r.archived === true,
+  }));
+}
+
+export async function insertConsultation(c: Consultation): Promise<void> {
+  const sql = getDb();
+  await sql`
+    INSERT INTO consultations (
+      id,
+      customer_id,
+      date,
+      type,
+      summary,
+      transcript,
+      archived
+    )
+    VALUES (
+      ${c.id},
+      ${c.customerId},
+      ${c.date},
+      ${c.type},
+      ${c.summary},
+      ${JSON.stringify(c.transcript ?? [])}::jsonb,
+      ${c.archived ?? false}
+    )
+    ON CONFLICT (id) DO NOTHING
+  `;
+}
+
+export async function archiveConsultationById(id: string): Promise<void> {
+  const sql = getDb();
+  await sql`UPDATE consultations SET archived = TRUE WHERE id = ${id}`;
 }

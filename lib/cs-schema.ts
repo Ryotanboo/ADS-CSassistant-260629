@@ -6,9 +6,11 @@
 import { z } from "zod";
 
 export const customerPhaseSchema = z.enum([
+  "freeTrial",
   "onboarding",
   "adoption",
   "success",
+  "churnRisk",
 ]);
 export type CustomerPhase = z.infer<typeof customerPhaseSchema>;
 
@@ -23,20 +25,6 @@ export type Customer = z.infer<typeof customerSchema>;
 
 export const customersSchema = z.array(customerSchema);
 
-export const consultationTypeSchema = z.enum(["issue", "action"]);
-export type ConsultationType = z.infer<typeof consultationTypeSchema>;
-
-export const consultationSchema = z.object({
-  id: z.string(),
-  customerId: z.string(),
-  date: z.string(),
-  type: consultationTypeSchema,
-  summary: z.string(),
-});
-export type Consultation = z.infer<typeof consultationSchema>;
-
-export const consultationsSchema = z.array(consultationSchema);
-
 export const chatRoleSchema = z.enum(["user", "assistant"]);
 export type ChatRole = z.infer<typeof chatRoleSchema>;
 
@@ -50,6 +38,22 @@ export const chatMessageSchema = z.object({
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
 export const chatMessagesSchema = z.array(chatMessageSchema);
+
+export const consultationTypeSchema = z.enum(["issue", "action"]);
+export type ConsultationType = z.infer<typeof consultationTypeSchema>;
+
+export const consultationSchema = z.object({
+  id: z.string(),
+  customerId: z.string(),
+  date: z.string(),
+  type: consultationTypeSchema,
+  summary: z.string(),
+  transcript: z.array(chatMessageSchema).optional(),
+  archived: z.boolean().default(false),
+});
+export type Consultation = z.infer<typeof consultationSchema>;
+
+export const consultationsSchema = z.array(consultationSchema);
 
 export const nextActionPrioritySchema = z.enum(["high", "medium", "low"]);
 export type NextActionPriority = z.infer<typeof nextActionPrioritySchema>;

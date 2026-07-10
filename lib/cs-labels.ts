@@ -5,10 +5,20 @@ import {
 } from "@/lib/cs-schema";
 
 export const CUSTOMER_PHASE_LABELS: Record<CustomerPhase, string> = {
+  freeTrial: "FT",
   onboarding: "導入中",
   adoption: "活用定着",
   success: "サクセス済",
+  churnRisk: "解約懸念",
 };
+
+export const CUSTOMER_PHASE_ORDER = [
+  "freeTrial",
+  "onboarding",
+  "adoption",
+  "success",
+  "churnRisk",
+] as const satisfies readonly CustomerPhase[];
 
 export const CONSULTATION_TYPE_LABELS: Record<ConsultationType, string> = {
   issue: "課題整理",

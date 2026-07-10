@@ -25,7 +25,10 @@ import {
 } from "@/lib/cs-schema";
 import { GRILL_ME_FIRST_MESSAGE } from "@/lib/cs-ai-prompt";
 import { CsGlobalHeader } from "@/components/cs/CsGlobalHeader";
-import { CustomerListPane } from "@/components/cs/CustomerListPane";
+import {
+  CustomerListPane,
+  type AddCustomerInput,
+} from "@/components/cs/CustomerListPane";
 import { CustomerSummaryPane } from "@/components/cs/CustomerSummaryPane";
 import { AIChatPane } from "@/components/cs/AIChatPane";
 import { NextActionPane } from "@/components/cs/NextActionPane";
@@ -35,6 +38,8 @@ import {
   toggleNextActionAction,
   deleteNextActionAction,
   addChatMessageAction,
+  archiveChatSessionAction,
+  archiveConsultationAction,
 } from "@/app/cs/actions";
 
 type CsWorkspaceProps = {
@@ -61,7 +66,8 @@ export function CsWorkspace({
   workspace,
 }: CsWorkspaceProps) {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
-  const [consultations] = useState<Consultation[]>(initialConsultations);
+  const [consultations, setConsultations] =
+    useState<Consultation[]>(initialConsultations);
   const [chatMessages, setChatMessages] =
     useState<ChatMessage[]>(initialChatMessages);
   const [nextActions, setNextActions] =
@@ -72,6 +78,7 @@ export function CsWorkspace({
 
   // AIチャット用の状態
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isArchivingChat, setIsArchivingChat] = useState(false);
   const [streamingContent, setStreamingContent] = useState<string>("");
   const [aiError, setAiError] = useState<string | null>(null);
   // 同時送信を防ぐ ref（stateより即時性がある）
@@ -81,7 +88,10 @@ export function CsWorkspace({
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
 
   const customerConsultations = useMemo(
-    () => consultations.filter((c) => c.customerId === activeCustomer?.id),
+    () =>
+      consultations.filter(
+        (c) => c.customerId === activeCustomer?.id && !c.archived,
+      ),
     [consultations, activeCustomer?.id],
   );
 
@@ -99,21 +109,18 @@ export function CsWorkspace({
     setSelectedCustomerId(id);
   }, []);
 
-  const addCustomer = useCallback(
-    (name: string) => {
-      const newCustomer: Customer = {
-        id: `cust-${Date.now()}`,
-        name,
-        phase: "onboarding",
-        contractStartDate: "—",
-        accountManager: workspace.currentUser.name,
-      };
-      setCustomers((prev) => [...prev, newCustomer]);
-      setSelectedCustomerId(newCustomer.id);
-      addCustomerAction(newCustomer).catch(console.error);
-    },
-    [workspace.currentUser.name],
-  );
+  const addCustomer = useCallback((input: AddCustomerInput) => {
+    const newCustomer: Customer = {
+      id: `cust-${Date.now()}`,
+      name: input.name,
+      phase: input.phase,
+      contractStartDate: "—",
+      accountManager: input.accountManager,
+    };
+    setCustomers((prev) => [...prev, newCustomer]);
+    setSelectedCustomerId(newCustomer.id);
+    addCustomerAction(newCustomer).catch(console.error);
+  }, []);
 
   /**
    * Gemini API をストリーミングで呼び出し、AIの返答をリアルタイム表示する。
@@ -123,6 +130,7 @@ export function CsWorkspace({
     async (
       messagesWithUser: ChatMessage[],
       customer: Customer,
+      contextConsultations: Consultation[],
     ) => {
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
@@ -136,7 +144,11 @@ export function CsWorkspace({
         const res = await fetch("/api/cs/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ customer, messages: messagesWithUser }),
+          body: JSON.stringify({
+            customer,
+            messages: messagesWithUser,
+            consultations: contextConsultations,
+          }),
         });
 
         if (!res.ok || !res.body) {
@@ -224,9 +236,13 @@ export function CsWorkspace({
       addChatMessageAction(userMessage).catch(console.error);
 
       // Gemini API 呼び出し
-      callAiStream(updatedMessages, activeCustomer).catch(console.error);
+      callAiStream(
+        updatedMessages,
+        activeCustomer,
+        customerConsultations,
+      ).catch(console.error);
     },
-    [activeCustomer, customerMessages, callAiStream],
+    [activeCustomer, customerMessages, customerConsultations, callAiStream],
   );
 
   const startGrillMe = useCallback(() => {
@@ -243,6 +259,65 @@ export function CsWorkspace({
     setChatMessages((prev) => [...prev, grillMessage]);
     addChatMessageAction(grillMessage).catch(console.error);
   }, [activeCustomer]);
+
+  const archiveChatSession = useCallback(async () => {
+    if (
+      !activeCustomer ||
+      customerMessages.length === 0 ||
+      isArchivingChat ||
+      isFetchingRef.current
+    ) {
+      return;
+    }
+
+    const messagesToArchive = customerMessages;
+    setIsArchivingChat(true);
+    setChatMessages((prev) =>
+      prev.filter((message) => message.customerId !== activeCustomer.id),
+    );
+
+    try {
+      const consultation = await archiveChatSessionAction(
+        activeCustomer,
+        messagesToArchive,
+      );
+      setConsultations((prev) => [...prev, consultation]);
+    } catch (err) {
+      console.error(err);
+      setChatMessages((prev) => [...prev, ...messagesToArchive]);
+      setAiError(
+        err instanceof Error ? err.message : "相談履歴の保存に失敗しました。",
+      );
+      throw err;
+    } finally {
+      setIsArchivingChat(false);
+    }
+  }, [activeCustomer, customerMessages, isArchivingChat]);
+
+  const archiveConsultation = useCallback((id: string) => {
+    setConsultations((prev) =>
+      prev.map((consultation) =>
+        consultation.id === id
+          ? { ...consultation, archived: true }
+          : consultation,
+      ),
+    );
+    archiveConsultationAction(id).catch((err) => {
+      console.error(err);
+      setConsultations((prev) =>
+        prev.map((consultation) =>
+          consultation.id === id
+            ? { ...consultation, archived: false }
+            : consultation,
+        ),
+      );
+      setAiError(
+        err instanceof Error
+          ? err.message
+          : "相談履歴のアーカイブに失敗しました。",
+      );
+    });
+  }, []);
 
   const toggleAction = useCallback((id: string, completed: boolean) => {
     setNextActions((prev) =>
@@ -293,13 +368,16 @@ export function CsWorkspace({
         <CustomerSummaryPane
           customer={activeCustomer}
           consultations={customerConsultations}
+          onArchiveConsultation={archiveConsultation}
         />
         <AIChatPane
           key={activeCustomer.id}
           messages={customerMessages}
           onSendMessage={sendMessage}
           onStartGrillMe={startGrillMe}
+          onArchiveSession={archiveChatSession}
           isLoading={isAiLoading}
+          isArchiving={isArchivingChat}
           streamingContent={streamingContent}
           errorMessage={aiError}
         />

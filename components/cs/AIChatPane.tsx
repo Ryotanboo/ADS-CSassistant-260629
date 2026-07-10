@@ -1,10 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Bot, Lightbulb, Loader2, Send, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  Bot,
+  Lightbulb,
+  Loader2,
+  Send,
+  Sparkles,
+} from "lucide-react";
 
 import { type ChatMessage } from "@/lib/cs-schema";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
@@ -17,7 +36,9 @@ type AIChatPaneProps = {
   messages: ChatMessage[];
   onSendMessage: (content: string) => void;
   onStartGrillMe: () => void;
+  onArchiveSession: () => Promise<void>;
   isLoading?: boolean;
+  isArchiving?: boolean;
   streamingContent?: string;
   errorMessage?: string | null;
 };
@@ -26,11 +47,14 @@ export function AIChatPane({
   messages,
   onSendMessage,
   onStartGrillMe,
+  onArchiveSession,
   isLoading = false,
+  isArchiving = false,
   streamingContent,
   errorMessage,
 }: AIChatPaneProps) {
   const [draft, setDraft] = useState("");
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const scrollBottomRef = useRef<HTMLDivElement>(null);
 
   // 新しいメッセージ追加・ストリーミング更新時に最下部へスクロール
@@ -43,6 +67,11 @@ export function AIChatPane({
     if (!trimmed || isLoading) return;
     onSendMessage(trimmed);
     setDraft("");
+  };
+
+  const handleArchiveSession = async () => {
+    await onArchiveSession();
+    setArchiveDialogOpen(false);
   };
 
   return (
@@ -63,9 +92,7 @@ export function AIChatPane({
                 <Sparkles aria-hidden className="size-7 text-white" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <p className="text-lg font-bold text-white">
-                  上司役AIとの1on1
-                </p>
+                <p className="text-lg font-bold text-white">上司役AIとの1on1</p>
                 <p className="text-xs text-white/80">
                   あなたの悩みや課題に、上司目線で伴走します
                 </p>
@@ -77,9 +104,7 @@ export function AIChatPane({
             ))}
 
             {/* ストリーミング中のAI応答バブル */}
-            {isLoading && (
-              <StreamingBubble content={streamingContent} />
-            )}
+            {isLoading && <StreamingBubble content={streamingContent} />}
 
             {/* エラー表示 */}
             {errorMessage && !isLoading && (
@@ -92,6 +117,46 @@ export function AIChatPane({
 
         {/* 入力エリア */}
         <div className="flex shrink-0 flex-col gap-3 border-t border-primary/20 bg-primary/10 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">
+              相談がまとまったら履歴に残せます
+            </span>
+            <AlertDialog
+              open={archiveDialogOpen}
+              onOpenChange={setArchiveDialogOpen}
+            >
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isLoading || isArchiving || messages.length === 0}
+                  />
+                }
+              >
+                {isArchiving ? "保存中" : "相談を終了"}
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>相談を履歴に残しますか？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    現在のチャットを要約して相談履歴に保存し、チャット欄を新しい相談として空にします。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleArchiveSession}
+                    disabled={isArchiving}
+                  >
+                    履歴に残す
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+
           <InputGroup className="h-auto min-h-10 bg-background">
             <InputGroupTextarea
               value={draft}
@@ -110,7 +175,10 @@ export function AIChatPane({
             <InputGroupAddon align="block-end" className="justify-end pb-2">
               {isLoading ? (
                 <div className="flex size-7 items-center justify-center">
-                  <Loader2 aria-hidden className="size-4 animate-spin text-muted-foreground" />
+                  <Loader2
+                    aria-hidden
+                    className="size-4 animate-spin text-muted-foreground"
+                  />
                 </div>
               ) : (
                 <InputGroupButton
@@ -159,12 +227,7 @@ function ChatBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
 
   return (
-    <div
-      className={cn(
-        "flex gap-3",
-        isUser ? "flex-row-reverse" : "flex-row",
-      )}
-    >
+    <div className={cn("flex gap-3", isUser ? "flex-row-reverse" : "flex-row")}>
       {!isUser && (
         <div
           className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15"
@@ -208,8 +271,8 @@ function StreamingBubble({ content }: { content?: string }) {
       >
         <Bot className="size-4 text-primary" />
       </div>
-      <div className="flex max-w-[82%] flex-col gap-1 items-start">
-        <div className="rounded-2xl rounded-tl-sm bg-card px-4 py-2.5 text-sm leading-relaxed ring-1 ring-border text-foreground whitespace-pre-wrap">
+      <div className="flex max-w-[82%] flex-col items-start gap-1">
+        <div className="rounded-2xl rounded-tl-sm bg-card px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-foreground ring-1 ring-border">
           {content ? (
             <>
               {content}
@@ -236,8 +299,8 @@ function ErrorBubble({ message }: { message: string }) {
       >
         <AlertCircle className="size-4 text-destructive" />
       </div>
-      <div className="flex max-w-[82%] flex-col gap-1 items-start">
-        <div className="rounded-2xl rounded-tl-sm bg-destructive/10 px-4 py-2.5 text-sm leading-relaxed ring-1 ring-destructive/30 text-destructive">
+      <div className="flex max-w-[82%] flex-col items-start gap-1">
+        <div className="rounded-2xl rounded-tl-sm bg-destructive/10 px-4 py-2.5 text-sm leading-relaxed text-destructive ring-1 ring-destructive/30">
           {message}
         </div>
       </div>
