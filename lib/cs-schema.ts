@@ -20,6 +20,8 @@ export const customerSchema = z.object({
   phase: customerPhaseSchema,
   contractStartDate: z.string(),
   accountManager: z.string(),
+  ftSummary: z.string().optional(),
+  ftSummaryUpdatedAt: z.string().optional(),
 });
 export type Customer = z.infer<typeof customerSchema>;
 
@@ -28,12 +30,34 @@ export const customersSchema = z.array(customerSchema);
 export const chatRoleSchema = z.enum(["user", "assistant"]);
 export type ChatRole = z.infer<typeof chatRoleSchema>;
 
+export const nextActionPrioritySchema = z.enum(["high", "medium", "low"]);
+export type NextActionPriority = z.infer<typeof nextActionPrioritySchema>;
+
+// chatMessageSchema が参照するため、nextActionPrioritySchema の後に定義する
+export const landingCardSchema = z.object({
+  summary: z.array(z.string()),
+  openQuestions: z.array(z.string()),
+  nextActions: z.array(
+    z.object({
+      label: z.string(),
+      priority: nextActionPrioritySchema,
+    }),
+  ),
+});
+export type LandingCard = z.infer<typeof landingCardSchema>;
+
+export const conversationIntentSchema = z.enum(["perspective", "actions"]);
+export type ConversationIntent = z.infer<typeof conversationIntentSchema>;
+
 export const chatMessageSchema = z.object({
   id: z.string(),
   customerId: z.string(),
   role: chatRoleSchema,
   content: z.string(),
   timestamp: z.string().optional(),
+  kind: z.enum(["text", "landing", "intent"]).default("text"),
+  card: landingCardSchema.optional(),
+  intent: conversationIntentSchema.optional(),
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
@@ -55,15 +79,14 @@ export type Consultation = z.infer<typeof consultationSchema>;
 
 export const consultationsSchema = z.array(consultationSchema);
 
-export const nextActionPrioritySchema = z.enum(["high", "medium", "low"]);
-export type NextActionPriority = z.infer<typeof nextActionPrioritySchema>;
-
 export const nextActionSchema = z.object({
   id: z.string(),
   customerId: z.string(),
   label: z.string(),
   priority: nextActionPrioritySchema,
   completed: z.boolean().default(false),
+  completedAt: z.string().optional(),
+  resultNote: z.string().optional(),
 });
 export type NextAction = z.infer<typeof nextActionSchema>;
 

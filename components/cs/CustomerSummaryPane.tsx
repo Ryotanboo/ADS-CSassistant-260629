@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import {
   Archive,
   Calendar,
+  ClipboardPaste,
   Clock,
+  Database,
   ExternalLink,
   MessageSquareText,
   MoreHorizontal,
@@ -12,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { type Consultation, type Customer } from "@/lib/cs-schema";
+import { CONVERSATION_INTENT_LABELS } from "@/lib/cs-conversation-intents";
 import {
   CONSULTATION_TYPE_LABELS,
   CUSTOMER_PHASE_LABELS,
@@ -19,7 +23,14 @@ import {
 import { consultationBadgeVariant, phaseBadgeVariant } from "@/lib/cs-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -37,17 +48,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 
 type CustomerSummaryPaneProps = {
   customer: Customer;
   consultations: Consultation[];
   onArchiveConsultation: (id: string) => void;
+  onUpdateFtSummary: (ftSummary: string) => Promise<void>;
 };
 
 export function CustomerSummaryPane({
   customer,
   consultations,
   onArchiveConsultation,
+  onUpdateFtSummary,
 }: CustomerSummaryPaneProps) {
   return (
     <section className="flex w-[300px] shrink-0 flex-col border-r border-border bg-background">
@@ -88,6 +108,11 @@ export function CustomerSummaryPane({
               />
             </CardContent>
           </Card>
+
+          <FtSummaryCard
+            customer={customer}
+            onUpdateFtSummary={onUpdateFtSummary}
+          />
 
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
@@ -149,6 +174,172 @@ export function CustomerSummaryPane({
         </Button>
       </footer>
     </section>
+  );
+}
+
+function extractFtHighlights(summary: string): string[] {
+  return summary
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line.startsWith("- フェーズ:") ||
+        line.startsWith("- 担当:") ||
+        line.startsWith("- FT残り:") ||
+        line.startsWith("- シグナル:"),
+    )
+    .map((line) => line.replace(/^- /, "").replace(/\*\*/g, ""))
+    .slice(0, 4);
+}
+
+function formatUpdatedAt(value?: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function FtSummaryCard({
+  customer,
+  onUpdateFtSummary,
+}: {
+  customer: Customer;
+  onUpdateFtSummary: (ftSummary: string) => Promise<void>;
+}) {
+  const [importOpen, setImportOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const summary = customer.ftSummary ?? "";
+  const highlights = extractFtHighlights(summary);
+  const updatedAt = formatUpdatedAt(customer.ftSummaryUpdatedAt);
+
+  const handleImport = async (formData: FormData) => {
+    const nextSummary = String(formData.get("ftSummary") ?? "").trim();
+    if (!nextSummary) return;
+    setIsSaving(true);
+    try {
+      await onUpdateFtSummary(nextSummary);
+      setImportOpen(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle emphasis="prominent">
+          <span className="flex items-center gap-2">
+            <Database aria-hidden className="size-4 text-primary" />
+            FT勝ち筋サマリ
+          </span>
+        </CardTitle>
+        <CardDescription>
+          {updatedAt ? `最終取り込み ${updatedAt}` : "まだ取り込まれていません"}
+        </CardDescription>
+        <CardAction>
+          <Dialog open={importOpen} onOpenChange={setImportOpen}>
+            <DialogTrigger
+              render={<Button type="button" variant="outline" size="sm" />}
+            >
+              <ClipboardPaste aria-hidden />
+              {summary ? "更新" : "取り込む"}
+            </DialogTrigger>
+            <DialogContent>
+              <form action={handleImport} className="flex flex-col gap-5">
+                <DialogHeader>
+                  <DialogTitle>FT勝ち筋サマリを取り込む</DialogTitle>
+                  <DialogDescription>
+                    FT勝ち筋ナビの「Notion用にコピー」で取得した内容を貼り付けます。
+                  </DialogDescription>
+                </DialogHeader>
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor={`ft-summary-${customer.id}`}>
+                      Notion用サマリ
+                    </FieldLabel>
+                    <Textarea
+                      key={`${customer.id}-${customer.ftSummaryUpdatedAt ?? "empty"}`}
+                      id={`ft-summary-${customer.id}`}
+                      name="ftSummary"
+                      defaultValue={summary}
+                      placeholder="FT勝ち筋ナビでコピーした内容を貼り付け"
+                      className="min-h-64"
+                      required
+                      autoFocus
+                    />
+                    <FieldDescription>
+                      既存の内容がある場合は、貼り付けた内容で更新されます。
+                    </FieldDescription>
+                  </Field>
+                </FieldGroup>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setImportOpen(false)}
+                  >
+                    キャンセル
+                  </Button>
+                  <Button type="submit" disabled={isSaving}>
+                    {isSaving ? "保存中" : "取り込む"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </CardAction>
+      </CardHeader>
+      {summary ? (
+        <CardContent className="flex flex-col gap-3">
+          {highlights.length > 0 ? (
+            <ul className="flex flex-col gap-2">
+              {highlights.map((highlight) => (
+                <li key={highlight} className="text-sm text-foreground">
+                  {highlight}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="line-clamp-4 text-sm whitespace-pre-wrap text-foreground">
+              {summary}
+            </p>
+          )}
+          <Dialog>
+            <DialogTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="self-start"
+                />
+              }
+            >
+              全文を見る
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>FT勝ち筋サマリ</DialogTitle>
+                <DialogDescription>
+                  取り込んだNotion用サマリの全文です。
+                </DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="max-h-[65vh]">
+                <pre className="pr-3 font-sans text-sm whitespace-pre-wrap text-foreground">
+                  {summary}
+                </pre>
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      ) : null}
+    </Card>
   );
 }
 
@@ -220,11 +411,17 @@ function ConsultationTranscriptDialog({
                 className="flex flex-col gap-1 rounded-lg bg-card p-3 ring-1 ring-border"
               >
                 <span className="text-xs text-muted-foreground">
-                  {message.role === "user" ? "担当CS" : "上司役AI"}
+                  {message.kind === "intent"
+                    ? "進行操作"
+                    : message.role === "user"
+                      ? "担当CS"
+                      : "上司役AI"}
                   {message.timestamp ? `・${message.timestamp}` : ""}
                 </span>
                 <p className="text-sm whitespace-pre-wrap text-foreground">
-                  {message.content}
+                  {message.kind === "intent" && message.intent
+                    ? CONVERSATION_INTENT_LABELS[message.intent]
+                    : message.content}
                 </p>
               </div>
             ))}

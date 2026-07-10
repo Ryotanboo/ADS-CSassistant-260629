@@ -1,16 +1,27 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   AlertCircle,
   Bot,
+  CheckCheck,
   Lightbulb,
+  ListChecks,
   Loader2,
   Send,
   Sparkles,
+  Waypoints,
 } from "lucide-react";
 
-import { type ChatMessage } from "@/lib/cs-schema";
+import {
+  type ChatMessage,
+  type ConversationIntent,
+  type LandingCard,
+  type NextAction,
+} from "@/lib/cs-schema";
+import { CONVERSATION_INTENT_LABELS } from "@/lib/cs-conversation-intents";
+import { NEXT_ACTION_PRIORITY_LABELS } from "@/lib/cs-labels";
+import { priorityBadgeVariant } from "@/lib/cs-badges";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -23,7 +34,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   InputGroup,
   InputGroupAddon,
@@ -31,14 +44,20 @@ import {
   InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
 type AIChatPaneProps = {
   messages: ChatMessage[];
   onSendMessage: (content: string) => void;
   onStartGrillMe: () => void;
   onArchiveSession: () => Promise<void>;
+  onDiscardSession: () => Promise<void>;
+  onRequestLanding: () => void;
+  onRequestIntent: (intent: ConversationIntent) => void;
+  onAddActionFromLanding: (label: string, priority: NextAction["priority"]) => void;
   isLoading?: boolean;
   isArchiving?: boolean;
+  isGeneratingLanding?: boolean;
   streamingContent?: string;
   errorMessage?: string | null;
 };
@@ -48,31 +67,69 @@ export function AIChatPane({
   onSendMessage,
   onStartGrillMe,
   onArchiveSession,
+  onDiscardSession,
+  onRequestLanding,
+  onRequestIntent,
+  onAddActionFromLanding,
   isLoading = false,
   isArchiving = false,
+  isGeneratingLanding = false,
   streamingContent,
   errorMessage,
 }: AIChatPaneProps) {
   const [draft, setDraft] = useState("");
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  // 着地カードから追加済みのアクションをラベルで管理（顧客切替時にリマウントでリセット）
+  const [addedLabels, setAddedLabels] = useState<Set<string>>(new Set());
   const scrollBottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // 新しいメッセージ追加・ストリーミング更新時に最下部へスクロール
   useEffect(() => {
     scrollBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingContent]);
+  }, [messages, streamingContent, isGeneratingLanding]);
+
+  useEffect(() => {
+    if (!isLoading && !isGeneratingLanding && !archiveDialogOpen) {
+      inputRef.current?.focus();
+    }
+  }, [isLoading, isGeneratingLanding, archiveDialogOpen, messages.length]);
 
   const handleSend = () => {
     const trimmed = draft.trim();
     if (!trimmed || isLoading) return;
     onSendMessage(trimmed);
     setDraft("");
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  };
+
+  const handleAddFromLanding = (label: string, priority: NextAction["priority"]) => {
+    onAddActionFromLanding(label, priority);
+    setAddedLabels((prev) => new Set([...prev, label]));
+  };
+
+  const handleAddAllFromLanding = (card: LandingCard) => {
+    card.nextActions.forEach((action) => {
+      if (!addedLabels.has(action.label)) {
+        handleAddFromLanding(action.label, action.priority);
+      }
+    });
   };
 
   const handleArchiveSession = async () => {
     await onArchiveSession();
     setArchiveDialogOpen(false);
   };
+
+  const handleDiscardSession = async () => {
+    await onDiscardSession();
+    setArchiveDialogOpen(false);
+  };
+
+  const isBusy = isLoading || isGeneratingLanding || isArchiving;
+  const hasMessages = messages.length > 0;
 
   return (
     <section className="flex min-w-0 flex-1 flex-col border-r border-border bg-background">
@@ -99,15 +156,67 @@ export function AIChatPane({
               </div>
             </div>
 
-            {messages.map((message) => (
-              <ChatBubble key={message.id} message={message} />
-            ))}
+            {messages.map((message) =>
+              message.kind === "landing" && message.card ? (
+                <LandingCardBubble
+                  key={message.id}
+                  card={message.card}
+                  addedLabels={addedLabels}
+                  onAddAction={handleAddFromLanding}
+                  onAddAll={handleAddAllFromLanding}
+                />
+              ) : message.kind === "intent" && message.intent ? (
+                <IntentBubble
+                  key={message.id}
+                  intent={message.intent}
+                  timestamp={message.timestamp}
+                />
+              ) : (
+                <ChatBubble key={message.id} message={message} />
+              ),
+            )}
+
+            {/* 会話の進行操作 */}
+            {hasMessages && !isBusy ? (
+              <div className="flex flex-wrap gap-2 pl-11">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onRequestIntent("perspective")}
+                >
+                  <Waypoints aria-hidden />
+                  別の視点を出す
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onRequestIntent("actions")}
+                >
+                  <Lightbulb aria-hidden />
+                  打ち手を考える
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onRequestLanding}
+                >
+                  <ListChecks aria-hidden />
+                  ここまでを整理
+                </Button>
+              </div>
+            ) : null}
 
             {/* ストリーミング中のAI応答バブル */}
             {isLoading && <StreamingBubble content={streamingContent} />}
 
+            {/* 着地カード生成中 */}
+            {isGeneratingLanding && <StreamingBubble content="" label="整理しています…" />}
+
             {/* エラー表示 */}
-            {errorMessage && !isLoading && (
+            {errorMessage && !isLoading && !isGeneratingLanding && (
               <ErrorBubble message={errorMessage} />
             )}
 
@@ -121,44 +230,54 @@ export function AIChatPane({
             <span className="text-xs text-muted-foreground">
               相談がまとまったら履歴に残せます
             </span>
-            <AlertDialog
-              open={archiveDialogOpen}
-              onOpenChange={setArchiveDialogOpen}
-            >
-              <AlertDialogTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isLoading || isArchiving || messages.length === 0}
-                  />
-                }
+            <div className="flex items-center gap-2">
+              <AlertDialog
+                open={archiveDialogOpen}
+                onOpenChange={setArchiveDialogOpen}
               >
-                {isArchiving ? "保存中" : "相談を終了"}
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>相談を履歴に残しますか？</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    現在のチャットを要約して相談履歴に保存し、チャット欄を新しい相談として空にします。
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleArchiveSession}
-                    disabled={isArchiving}
-                  >
-                    履歴に残す
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isBusy || !hasMessages}
+                    />
+                  }
+                >
+                  {isArchiving ? "保存中" : "相談を終了"}
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>相談を履歴に残しますか？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      現在のチャットを相談履歴に保存するか、保存せずにチャット欄だけ空にできます。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="outline"
+                      onClick={handleDiscardSession}
+                      disabled={isArchiving}
+                    >
+                      履歴に残さない
+                    </AlertDialogAction>
+                    <AlertDialogAction
+                      onClick={handleArchiveSession}
+                      disabled={isArchiving}
+                    >
+                      履歴に残す
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
 
           <InputGroup className="h-auto min-h-10 bg-background">
             <InputGroupTextarea
+              ref={inputRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="メッセージを入力してください..."
@@ -166,7 +285,11 @@ export function AIChatPane({
               aria-label="メッセージを入力"
               disabled={isLoading}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                if (
+                  e.key === "Enter" &&
+                  !e.shiftKey &&
+                  !e.nativeEvent.isComposing
+                ) {
                   e.preventDefault();
                   handleSend();
                 }
@@ -186,7 +309,7 @@ export function AIChatPane({
                   size="icon-sm"
                   onClick={handleSend}
                   disabled={!draft.trim()}
-                  aria-label="送信（Cmd+Enter）"
+                  aria-label="送信（Enter）"
                 >
                   <Send aria-hidden />
                 </InputGroupButton>
@@ -197,7 +320,12 @@ export function AIChatPane({
           {/* grill-me カード */}
           <button
             type="button"
-            onClick={onStartGrillMe}
+            onClick={() => {
+              onStartGrillMe();
+              requestAnimationFrame(() => {
+                inputRef.current?.focus();
+              });
+            }}
             disabled={isLoading}
             className={cn(
               "flex items-center gap-3 rounded-xl bg-primary px-4 py-3 text-left transition-opacity",
@@ -262,7 +390,178 @@ function ChatBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-function StreamingBubble({ content }: { content?: string }) {
+function IntentBubble({
+  intent,
+  timestamp,
+}: {
+  intent: ConversationIntent;
+  timestamp?: string;
+}) {
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Badge variant="outline">
+        進行操作: {CONVERSATION_INTENT_LABELS[intent]}
+      </Badge>
+      {timestamp ? (
+        <time className="text-xs text-muted-foreground">{timestamp}</time>
+      ) : null}
+    </div>
+  );
+}
+
+function LandingCardBubble({
+  card,
+  addedLabels,
+  onAddAction,
+  onAddAll,
+}: {
+  card: LandingCard;
+  addedLabels: Set<string>;
+  onAddAction: (label: string, priority: NextAction["priority"]) => void;
+  onAddAll: (card: LandingCard) => void;
+}) {
+  const allAdded = card.nextActions.every((a) => addedLabels.has(a.label));
+
+  return (
+    <div className="flex gap-3">
+      <div
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15"
+        aria-hidden
+      >
+        <ListChecks className="size-4 text-primary" />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <Card className="overflow-hidden">
+          {/* カードヘッダー */}
+          <div className="flex items-center justify-between gap-2 border-b border-border bg-primary/10 px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <Sparkles aria-hidden className="size-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">
+                ここまでの整理
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onAddAll(card)}
+              disabled={allAdded}
+            >
+              {allAdded ? (
+                <>
+                  <CheckCheck aria-hidden className="size-3.5" />
+                  すべて追加済み
+                </>
+              ) : (
+                <>
+                  <ListChecks aria-hidden className="size-3.5" />
+                  すべてPane 4へ
+                </>
+              )}
+            </Button>
+          </div>
+
+          <CardContent className="flex flex-col gap-4 p-4">
+            {/* 整理できたこと */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                整理できたこと
+              </span>
+              <ul className="flex flex-col gap-1.5">
+                {card.summary.map((item, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-foreground">
+                    <span
+                      className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary"
+                      aria-hidden
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* 未確認事項 */}
+            {card.openQuestions.length > 0 && (
+              <>
+                <Separator />
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    未確認事項
+                  </span>
+                  <ul className="flex flex-col gap-1.5">
+                    {card.openQuestions.map((item, i) => (
+                      <li
+                        key={i}
+                        className="flex gap-2 text-sm text-muted-foreground"
+                      >
+                        <span
+                          className="mt-1.5 size-1.5 shrink-0 rounded-full bg-muted-foreground/40"
+                          aria-hidden
+                        />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
+
+            {/* 次にやること */}
+            <Separator />
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                次にやること
+              </span>
+              <ul className="flex flex-col gap-2">
+                {card.nextActions.map((action, i) => {
+                  const added = addedLabels.has(action.label);
+                  return (
+                    <li key={i} className="flex items-start gap-2">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <span
+                          className={cn(
+                            "text-sm text-foreground",
+                            added && "text-muted-foreground line-through",
+                          )}
+                        >
+                          {action.label}
+                        </span>
+                        <Badge
+                          variant={priorityBadgeVariant(action.priority)}
+                          size="xs"
+                        >
+                          {NEXT_ACTION_PRIORITY_LABELS[action.priority]}
+                        </Badge>
+                      </div>
+                      <Button
+                        type="button"
+                        variant={added ? "outline" : "default"}
+                        size="sm"
+                        onClick={() => onAddAction(action.label, action.priority)}
+                        disabled={added}
+                        className="shrink-0"
+                      >
+                        {added ? "追加済み" : "追加"}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function StreamingBubble({
+  content,
+  label = "考えています…",
+}: {
+  content?: string;
+  label?: string;
+}) {
   return (
     <div className="flex gap-3">
       <div
@@ -281,7 +580,7 @@ function StreamingBubble({ content }: { content?: string }) {
           ) : (
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <Loader2 aria-hidden className="size-3.5 animate-spin" />
-              考えています…
+              {label}
             </span>
           )}
         </div>

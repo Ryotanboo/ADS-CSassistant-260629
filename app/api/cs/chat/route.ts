@@ -6,12 +6,14 @@ import {
   customerSchema,
   chatMessageSchema,
   consultationSchema,
+  nextActionSchema,
 } from "@/lib/cs-schema";
 
 const requestSchema = z.object({
   customer: customerSchema,
   messages: z.array(chatMessageSchema),
   consultations: z.array(consultationSchema).default([]),
+  nextActions: z.array(nextActionSchema).default([]),
 });
 
 export async function POST(req: NextRequest) {
@@ -54,8 +56,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { customer, messages, consultations } = parsed.data;
-  const systemPrompt = buildSystemPrompt(customer, consultations);
+  const { customer, messages, consultations, nextActions } = parsed.data;
+  const systemPrompt = buildSystemPrompt(customer, consultations, nextActions);
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({

@@ -4,6 +4,7 @@ import {
   getAllNextActions,
   getAllChatMessages,
   getAllConsultations,
+  getWorkspaceUser,
   initTables,
 } from "@/lib/cs-db";
 import workspaceData from "@/data/cs-workspace.json";
@@ -17,16 +18,6 @@ export default async function CsPage() {
   // テーブルが存在しない場合に備えて初期化
   await initTables();
 
-  // DBからデータを取得
-  const [customers, nextActions, chatMessages, savedConsultations] =
-    await Promise.all([
-      getCustomers(),
-      getAllNextActions(),
-      getAllChatMessages(),
-      getAllConsultations(),
-    ]);
-
-  // 相談履歴はデモ初期データ + DB保存された相談ログを表示する
   const consultationsResult = consultationsSchema.safeParse(consultationsData);
   const wsResult = csWorkspaceSchema.safeParse(workspaceData);
 
@@ -34,6 +25,17 @@ export default async function CsPage() {
     throw new Error("設定データの形式が正しくありません");
   }
 
+  // DBからデータを取得
+  const [customers, nextActions, chatMessages, savedConsultations, currentUser] =
+    await Promise.all([
+      getCustomers(),
+      getAllNextActions(),
+      getAllChatMessages(),
+      getAllConsultations(),
+      getWorkspaceUser(wsResult.data.currentUser.name),
+    ]);
+
+  // 相談履歴はデモ初期データ + DB保存された相談ログを表示する
   return (
     <CsWorkspace
       initialCustomers={customers}
@@ -43,7 +45,7 @@ export default async function CsPage() {
       ]}
       initialChatMessages={chatMessages}
       initialNextActions={nextActions}
-      workspace={wsResult.data}
+      workspace={{ ...wsResult.data, currentUser }}
     />
   );
 }

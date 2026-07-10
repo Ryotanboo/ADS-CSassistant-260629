@@ -10,11 +10,13 @@
  */
 
 import { neon } from "@neondatabase/serverless";
-import type {
-  ChatMessage,
-  Consultation,
-  Customer,
-  NextAction,
+import {
+  landingCardSchema,
+  type ChatMessage,
+  type Consultation,
+  type Customer,
+  type NextAction,
+  type WorkspaceUser,
 } from "@/lib/cs-schema";
 
 function getDb() {
@@ -46,6 +48,8 @@ export async function initTables() {
       label TEXT NOT NULL,
       priority TEXT NOT NULL,
       completed BOOLEAN DEFAULT FALSE,
+      completed_at TEXT,
+      result_note TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
@@ -75,6 +79,41 @@ export async function initTables() {
     ALTER TABLE consultations
     ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE
   `;
+  await sql`
+    ALTER TABLE chat_messages
+    ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'text'
+  `;
+  await sql`
+    ALTER TABLE chat_messages
+    ADD COLUMN IF NOT EXISTS card JSONB
+  `;
+  await sql`
+    ALTER TABLE chat_messages
+    ADD COLUMN IF NOT EXISTS intent TEXT
+  `;
+  await sql`
+    ALTER TABLE customers
+    ADD COLUMN IF NOT EXISTS ft_summary TEXT
+  `;
+  await sql`
+    ALTER TABLE customers
+    ADD COLUMN IF NOT EXISTS ft_summary_updated_at TEXT
+  `;
+  await sql`
+    ALTER TABLE next_actions
+    ADD COLUMN IF NOT EXISTS completed_at TEXT
+  `;
+  await sql`
+    ALTER TABLE next_actions
+    ADD COLUMN IF NOT EXISTS result_note TEXT
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS cs_settings (
+      id TEXT PRIMARY KEY,
+      user_name TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 }
 
 // ─────────────────────────────────────────────
@@ -84,7 +123,14 @@ export async function initTables() {
 export async function getCustomers(): Promise<Customer[]> {
   const sql = getDb();
   const rows = await sql`
-    SELECT id, name, phase, contract_start_date, account_manager
+    SELECT
+      id,
+      name,
+      phase,
+      contract_start_date,
+      account_manager,
+      ft_summary,
+      ft_summary_updated_at
     FROM customers
     ORDER BY created_at ASC
   `;
@@ -94,15 +140,51 @@ export async function getCustomers(): Promise<Customer[]> {
     phase: r.phase as Customer["phase"],
     contractStartDate: r.contract_start_date as string,
     accountManager: r.account_manager as string,
+    ftSummary: r.ft_summary != null ? (r.ft_summary as string) : undefined,
+    ftSummaryUpdatedAt:
+      r.ft_summary_updated_at != null
+        ? (r.ft_summary_updated_at as string)
+        : undefined,
   }));
 }
 
 export async function insertCustomer(c: Customer): Promise<void> {
   const sql = getDb();
   await sql`
-    INSERT INTO customers (id, name, phase, contract_start_date, account_manager)
-    VALUES (${c.id}, ${c.name}, ${c.phase}, ${c.contractStartDate}, ${c.accountManager})
+    INSERT INTO customers (
+      id,
+      name,
+      phase,
+      contract_start_date,
+      account_manager,
+      ft_summary,
+      ft_summary_updated_at
+    )
+    VALUES (
+      ${c.id},
+      ${c.name},
+      ${c.phase},
+      ${c.contractStartDate},
+      ${c.accountManager},
+      ${c.ftSummary ?? null},
+      ${c.ftSummaryUpdatedAt ?? null}
+    )
     ON CONFLICT (id) DO NOTHING
+  `;
+}
+
+export async function updateCustomerFtSummary(
+  customerId: string,
+  ftSummary: string,
+  updatedAt: string,
+): Promise<void> {
+  const sql = getDb();
+  await sql`
+    UPDATE customers
+    SET
+      ft_summary = ${ftSummary},
+      ft_summary_updated_at = ${updatedAt}
+    WHERE id = ${customerId}
   `;
 }
 
@@ -115,7 +197,14 @@ export async function getNextActions(
 ): Promise<NextAction[]> {
   const sql = getDb();
   const rows = await sql`
-    SELECT id, customer_id, label, priority, completed
+    SELECT
+      id,
+      customer_id,
+      label,
+      priority,
+      completed,
+      completed_at,
+      result_note
     FROM next_actions
     WHERE customer_id = ${customerId}
     ORDER BY created_at ASC
@@ -126,13 +215,23 @@ export async function getNextActions(
     label: r.label as string,
     priority: r.priority as NextAction["priority"],
     completed: r.completed as boolean,
+    completedAt:
+      r.completed_at != null ? (r.completed_at as string) : undefined,
+    resultNote: r.result_note != null ? (r.result_note as string) : undefined,
   }));
 }
 
 export async function getAllNextActions(): Promise<NextAction[]> {
   const sql = getDb();
   const rows = await sql`
-    SELECT id, customer_id, label, priority, completed
+    SELECT
+      id,
+      customer_id,
+      label,
+      priority,
+      completed,
+      completed_at,
+      result_note
     FROM next_actions
     ORDER BY created_at ASC
   `;
@@ -142,14 +241,33 @@ export async function getAllNextActions(): Promise<NextAction[]> {
     label: r.label as string,
     priority: r.priority as NextAction["priority"],
     completed: r.completed as boolean,
+    completedAt:
+      r.completed_at != null ? (r.completed_at as string) : undefined,
+    resultNote: r.result_note != null ? (r.result_note as string) : undefined,
   }));
 }
 
 export async function insertNextAction(a: NextAction): Promise<void> {
   const sql = getDb();
   await sql`
-    INSERT INTO next_actions (id, customer_id, label, priority, completed)
-    VALUES (${a.id}, ${a.customerId}, ${a.label}, ${a.priority}, ${a.completed})
+    INSERT INTO next_actions (
+      id,
+      customer_id,
+      label,
+      priority,
+      completed,
+      completed_at,
+      result_note
+    )
+    VALUES (
+      ${a.id},
+      ${a.customerId},
+      ${a.label},
+      ${a.priority},
+      ${a.completed},
+      ${a.completedAt ?? null},
+      ${a.resultNote ?? null}
+    )
     ON CONFLICT (id) DO NOTHING
   `;
 }
@@ -157,12 +275,30 @@ export async function insertNextAction(a: NextAction): Promise<void> {
 export async function upsertNextAction(a: NextAction): Promise<void> {
   const sql = getDb();
   await sql`
-    INSERT INTO next_actions (id, customer_id, label, priority, completed)
-    VALUES (${a.id}, ${a.customerId}, ${a.label}, ${a.priority}, ${a.completed})
+    INSERT INTO next_actions (
+      id,
+      customer_id,
+      label,
+      priority,
+      completed,
+      completed_at,
+      result_note
+    )
+    VALUES (
+      ${a.id},
+      ${a.customerId},
+      ${a.label},
+      ${a.priority},
+      ${a.completed},
+      ${a.completedAt ?? null},
+      ${a.resultNote ?? null}
+    )
     ON CONFLICT (id) DO UPDATE SET
       label = EXCLUDED.label,
       priority = EXCLUDED.priority,
-      completed = EXCLUDED.completed
+      completed = EXCLUDED.completed,
+      completed_at = EXCLUDED.completed_at,
+      result_note = EXCLUDED.result_note
   `;
 }
 
@@ -174,56 +310,110 @@ export async function deleteNextActionById(id: string): Promise<void> {
 export async function updateNextActionCompleted(
   id: string,
   completed: boolean,
+  completedAt?: string,
 ): Promise<void> {
   const sql = getDb();
-  await sql`UPDATE next_actions SET completed = ${completed} WHERE id = ${id}`;
+  await sql`
+    UPDATE next_actions
+    SET
+      completed = ${completed},
+      completed_at = ${completedAt ?? null}
+    WHERE id = ${id}
+  `;
+}
+
+export async function updateNextActionResult(
+  id: string,
+  resultNote: string,
+): Promise<void> {
+  const sql = getDb();
+  await sql`
+    UPDATE next_actions
+    SET result_note = ${resultNote}
+    WHERE id = ${id}
+  `;
 }
 
 // ─────────────────────────────────────────────
 // chat_messages
 // ─────────────────────────────────────────────
 
-export async function getChatMessages(
-  customerId: string,
-): Promise<ChatMessage[]> {
-  const sql = getDb();
-  const rows = await sql`
-    SELECT id, customer_id, role, content, timestamp
-    FROM chat_messages
-    WHERE customer_id = ${customerId}
-    ORDER BY created_at ASC
-  `;
-  return rows.map((r) => ({
+function mapChatMessageRow(r: Record<string, unknown>): ChatMessage {
+  const kind =
+    r.kind === "landing"
+      ? ("landing" as const)
+      : r.kind === "intent"
+        ? ("intent" as const)
+        : ("text" as const);
+  let card: ChatMessage["card"] = undefined;
+  if (kind === "landing" && r.card != null) {
+    const parsed = landingCardSchema.safeParse(r.card);
+    if (parsed.success) card = parsed.data;
+  }
+  return {
     id: r.id as string,
     customerId: r.customer_id as string,
     role: r.role as ChatMessage["role"],
     content: r.content as string,
     // DB の NULL を undefined に正規化（Zod の z.string().optional() は null を拒否する）
     timestamp: r.timestamp != null ? (r.timestamp as string) : undefined,
-  }));
+    kind,
+    card,
+    intent:
+      r.intent === "perspective" || r.intent === "actions"
+        ? r.intent
+        : undefined,
+  };
+}
+
+export async function getChatMessages(
+  customerId: string,
+): Promise<ChatMessage[]> {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT id, customer_id, role, content, timestamp, kind, card, intent
+    FROM chat_messages
+    WHERE customer_id = ${customerId}
+    ORDER BY created_at ASC
+  `;
+  return rows.map((r) => mapChatMessageRow(r as Record<string, unknown>));
 }
 
 export async function getAllChatMessages(): Promise<ChatMessage[]> {
   const sql = getDb();
   const rows = await sql`
-    SELECT id, customer_id, role, content, timestamp
+    SELECT id, customer_id, role, content, timestamp, kind, card, intent
     FROM chat_messages
     ORDER BY created_at ASC
   `;
-  return rows.map((r) => ({
-    id: r.id as string,
-    customerId: r.customer_id as string,
-    role: r.role as ChatMessage["role"],
-    content: r.content as string,
-    timestamp: r.timestamp != null ? (r.timestamp as string) : undefined,
-  }));
+  return rows.map((r) => mapChatMessageRow(r as Record<string, unknown>));
 }
 
 export async function insertChatMessage(m: ChatMessage): Promise<void> {
   const sql = getDb();
+  const kind = m.kind ?? "text";
+  const card = m.card != null ? JSON.stringify(m.card) : null;
   await sql`
-    INSERT INTO chat_messages (id, customer_id, role, content, timestamp)
-    VALUES (${m.id}, ${m.customerId}, ${m.role}, ${m.content}, ${m.timestamp ?? null})
+    INSERT INTO chat_messages (
+      id,
+      customer_id,
+      role,
+      content,
+      timestamp,
+      kind,
+      card,
+      intent
+    )
+    VALUES (
+      ${m.id},
+      ${m.customerId},
+      ${m.role},
+      ${m.content},
+      ${m.timestamp ?? null},
+      ${kind},
+      ${card}::jsonb,
+      ${m.intent ?? null}
+    )
     ON CONFLICT (id) DO NOTHING
   `;
 }
@@ -269,6 +459,16 @@ function parseTranscript(value: unknown): ChatMessage[] | undefined {
             timestamp:
               typeof message.timestamp === "string"
                 ? message.timestamp
+                : undefined,
+            kind:
+              message.kind === "landing"
+                ? ("landing" as const)
+                : message.kind === "intent"
+                  ? ("intent" as const)
+                  : ("text" as const),
+            intent:
+              message.intent === "perspective" || message.intent === "actions"
+                ? message.intent
                 : undefined,
           },
         ];
@@ -325,4 +525,39 @@ export async function insertConsultation(c: Consultation): Promise<void> {
 export async function archiveConsultationById(id: string): Promise<void> {
   const sql = getDb();
   await sql`UPDATE consultations SET archived = TRUE WHERE id = ${id}`;
+}
+
+// ─────────────────────────────────────────────
+// settings
+// ─────────────────────────────────────────────
+
+const SETTINGS_ID = "default";
+
+export async function getWorkspaceUser(
+  fallbackName: string,
+): Promise<WorkspaceUser> {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT user_name
+    FROM cs_settings
+    WHERE id = ${SETTINGS_ID}
+    LIMIT 1
+  `;
+  return {
+    name:
+      rows[0]?.user_name != null
+        ? (rows[0].user_name as string)
+        : fallbackName,
+  };
+}
+
+export async function updateWorkspaceUserName(name: string): Promise<void> {
+  const sql = getDb();
+  await sql`
+    INSERT INTO cs_settings (id, user_name, updated_at)
+    VALUES (${SETTINGS_ID}, ${name}, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      user_name = EXCLUDED.user_name,
+      updated_at = NOW()
+  `;
 }

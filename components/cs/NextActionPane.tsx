@@ -7,6 +7,7 @@ import { type NextAction } from "@/lib/cs-schema";
 import { NEXT_ACTION_PRIORITY_LABELS } from "@/lib/cs-labels";
 import { priorityBadgeVariant } from "@/lib/cs-badges";
 import { cn } from "@/lib/utils";
+import { InlineTextField } from "@/components/primitives/InlineTextField";
 import { AddItemDialog } from "@/components/workspace/AddItemDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,13 +24,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 type NextActionPaneProps = {
   actions: NextAction[];
   onToggleAction: (id: string, completed: boolean) => void;
-  onAddAction: (label: string) => void;
+  onUpdateActionResult: (id: string, resultNote: string) => void;
+  onAddAction: (label: string, priority?: NextAction["priority"]) => void;
   onDeleteAction: (id: string) => void;
 };
 
 export function NextActionPane({
   actions,
   onToggleAction,
+  onUpdateActionResult,
   onAddAction,
   onDeleteAction,
 }: NextActionPaneProps) {
@@ -79,6 +82,22 @@ export function NextActionPane({
                 >
                   {NEXT_ACTION_PRIORITY_LABELS[action.priority]}
                 </Badge>
+                {action.completed ? (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">
+                      結果メモ（任意）
+                    </span>
+                    <InlineTextField
+                      key={`${action.id}-${action.resultNote ?? ""}`}
+                      value={action.resultNote ?? ""}
+                      onSave={(resultNote) =>
+                        onUpdateActionResult(action.id, resultNote)
+                      }
+                      ariaLabel={`${action.label} の結果メモ`}
+                      placeholder="例: 判断基準を確認できた"
+                    />
+                  </div>
+                ) : null}
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger

@@ -10,7 +10,10 @@ import {
   insertChatMessage,
   insertCustomer,
   insertNextAction,
+  updateCustomerFtSummary,
   updateNextActionCompleted,
+  updateNextActionResult,
+  updateWorkspaceUserName,
 } from "@/lib/cs-db";
 import { buildConsultationSummaryPrompt } from "@/lib/cs-ai-prompt";
 import type {
@@ -68,7 +71,41 @@ export async function addNextActionAction(action: NextAction) {
 }
 
 export async function toggleNextActionAction(id: string, completed: boolean) {
-  await updateNextActionCompleted(id, completed);
+  const completedAt = completed ? new Date().toISOString() : undefined;
+  await updateNextActionCompleted(id, completed, completedAt);
+  revalidatePath("/cs");
+  return completedAt;
+}
+
+export async function updateNextActionResultAction(
+  id: string,
+  resultNote: string,
+) {
+  const normalized = resultNote.trim().slice(0, 1000);
+  await updateNextActionResult(id, normalized);
+  revalidatePath("/cs");
+}
+
+export async function updateCustomerFtSummaryAction(
+  customerId: string,
+  ftSummary: string,
+) {
+  const normalized = ftSummary.trim();
+  if (normalized.length > 50000) {
+    throw new Error("FT勝ち筋サマリは50,000文字以内で入力してください");
+  }
+  const updatedAt = new Date().toISOString();
+  await updateCustomerFtSummary(customerId, normalized, updatedAt);
+  revalidatePath("/cs");
+  return updatedAt;
+}
+
+export async function updateWorkspaceUserNameAction(name: string) {
+  const normalized = name.trim();
+  if (!normalized) {
+    throw new Error("名前を入力してください");
+  }
+  await updateWorkspaceUserName(normalized.slice(0, 80));
   revalidatePath("/cs");
 }
 
@@ -105,6 +142,13 @@ export async function archiveChatSessionAction(
   revalidatePath("/cs");
 
   return consultation;
+}
+
+export async function discardChatSessionAction(messages: ChatMessage[]) {
+  if (messages.length === 0) return;
+
+  await deleteChatMessagesByIds(messages.map((message) => message.id));
+  revalidatePath("/cs");
 }
 
 export async function archiveConsultationAction(id: string) {
