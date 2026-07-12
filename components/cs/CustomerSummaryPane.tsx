@@ -366,7 +366,7 @@ function ConsultationMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent side="right" align="start">
         <DropdownMenuGroup>
-          <DropdownMenuItem onSelect={() => onArchive(consultation.id)}>
+          <DropdownMenuItem onClick={() => onArchive(consultation.id)}>
             <Archive aria-hidden />
             アーカイブ
           </DropdownMenuItem>

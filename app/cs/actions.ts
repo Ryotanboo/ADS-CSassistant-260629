@@ -5,11 +5,13 @@ import { revalidatePath } from "next/cache";
 import {
   archiveConsultationById,
   deleteChatMessagesByIds,
+  deleteCustomerById,
   deleteNextActionById,
   insertConsultation,
   insertChatMessage,
   insertCustomer,
   insertNextAction,
+  updateCustomerArchived,
   updateCustomerFtSummary,
   updateNextActionCompleted,
   updateNextActionResult,
@@ -62,6 +64,19 @@ async function summarizeConsultation(
 
 export async function addCustomerAction(customer: Customer) {
   await insertCustomer(customer);
+  revalidatePath("/cs");
+}
+
+export async function archiveCustomerAction(
+  customerId: string,
+  archived: boolean,
+) {
+  await updateCustomerArchived(customerId, archived);
+  revalidatePath("/cs");
+}
+
+export async function deleteCustomerAction(customerId: string) {
+  await deleteCustomerById(customerId);
   revalidatePath("/cs");
 }
 

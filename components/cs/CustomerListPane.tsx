@@ -1,12 +1,26 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, Plus, Search } from "lucide-react";
+import { Archive, Building2, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 
 import { type Customer, type CustomerPhase } from "@/lib/cs-schema";
-import { CUSTOMER_PHASE_LABELS, CUSTOMER_PHASE_ORDER } from "@/lib/cs-labels";
+import {
+  CUSTOMER_PHASE_LABELS,
+  CUSTOMER_PHASE_LIST_RANK,
+  CUSTOMER_PHASE_ORDER,
+} from "@/lib/cs-labels";
 import { phaseBadgeVariant } from "@/lib/cs-badges";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +32,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -45,22 +66,49 @@ type CustomerListPaneProps = {
   selectedCustomerId: string;
   onSelectCustomer: (id: string) => void;
   onAddCustomer: (customer: AddCustomerInput) => void;
+  onArchiveCustomer: (id: string, archived: boolean) => void;
+  onDeleteCustomer: (id: string) => void;
 };
+
+function sortCustomersForList(customers: Customer[]) {
+  return [...customers].sort((a, b) => {
+    const phaseDiff =
+      CUSTOMER_PHASE_LIST_RANK[a.phase] - CUSTOMER_PHASE_LIST_RANK[b.phase];
+    if (phaseDiff !== 0) return phaseDiff;
+    return a.name.localeCompare(b.name, "ja");
+  });
+}
 
 export function CustomerListPane({
   customers,
   selectedCustomerId,
   onSelectCustomer,
   onAddCustomer,
+  onArchiveCustomer,
+  onDeleteCustomer,
 }: CustomerListPaneProps) {
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
 
-  const filteredCustomers = useMemo(() => {
+  const archivedCount = useMemo(
+    () => customers.filter((customer) => customer.archived).length,
+    [customers],
+  );
+
+  const visibleCustomers = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return customers;
-    return customers.filter((c) => c.name.toLowerCase().includes(normalized));
-  }, [customers, query]);
+    const filtered = customers.filter((customer) => {
+      const matchesArchive = showArchived
+        ? customer.archived
+        : !customer.archived;
+      if (!matchesArchive) return false;
+      if (!normalized) return true;
+      return customer.name.toLowerCase().includes(normalized);
+    });
+    return sortCustomersForList(filtered);
+  }, [customers, query, showArchived]);
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-sidebar text-sidebar-foreground">
@@ -72,7 +120,7 @@ export function CustomerListPane({
         <h2 className="truncate text-sm font-semibold">顧客リスト</h2>
       </header>
 
-      <div className="shrink-0 px-3 py-3">
+      <div className="flex shrink-0 flex-col gap-2 px-3 py-3">
         <InputGroup>
           <InputGroupAddon align="inline-start">
             <Search aria-hidden />
@@ -84,34 +132,112 @@ export function CustomerListPane({
             aria-label="顧客を検索"
           />
         </InputGroup>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">
+            {showArchived
+              ? `アーカイブ ${visibleCustomers.length}件`
+              : `対応中 ${visibleCustomers.length}件`}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => setShowArchived((prev) => !prev)}
+            disabled={!showArchived && archivedCount === 0}
+          >
+            <Archive aria-hidden />
+            {showArchived ? "対応中を表示" : "アーカイブ"}
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <ul className="flex flex-col gap-1 px-2 pb-3">
-          {filteredCustomers.map((customer) => {
-            const selected = customer.id === selectedCustomerId;
-            return (
-              <li key={customer.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelectCustomer(customer.id)}
-                  className={cn(
-                    "flex w-full flex-col gap-1.5 rounded-md px-2.5 py-2.5 text-left transition-colors",
-                    "outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                    selected
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "hover:bg-sidebar-accent/60",
-                  )}
-                >
-                  <span className="truncate text-sm">{customer.name}</span>
-                  <Badge variant={phaseBadgeVariant(customer.phase)} size="xs">
-                    {CUSTOMER_PHASE_LABELS[customer.phase]}
-                  </Badge>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {visibleCustomers.length === 0 ? (
+          <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+            {showArchived
+              ? "アーカイブされた顧客はありません"
+              : query.trim()
+                ? "該当する顧客がありません"
+                : "顧客がありません。追加してください"}
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1 px-2 pb-3">
+            {visibleCustomers.map((customer) => {
+              const selected = customer.id === selectedCustomerId;
+              return (
+                <li key={customer.id} className="group/customer relative">
+                  <button
+                    type="button"
+                    onClick={() => onSelectCustomer(customer.id)}
+                    className={cn(
+                      "flex w-full flex-col gap-1.5 rounded-md px-2.5 py-2.5 pr-9 text-left transition-colors",
+                      "outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                      selected
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "hover:bg-sidebar-accent/60",
+                      customer.archived && "opacity-70",
+                    )}
+                  >
+                    <span className="truncate text-sm">{customer.name}</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge
+                        variant={phaseBadgeVariant(customer.phase)}
+                        size="xs"
+                      >
+                        {CUSTOMER_PHASE_LABELS[customer.phase]}
+                      </Badge>
+                      {customer.archived ? (
+                        <Badge variant="secondary" size="xs">
+                          アーカイブ
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className={cn(
+                            "absolute top-2 right-1.5 text-muted-foreground opacity-0 transition-opacity",
+                            "group-hover/customer:opacity-100 group-focus-within/customer:opacity-100",
+                          )}
+                          aria-label={`${customer.name} の操作`}
+                        />
+                      }
+                    >
+                      <MoreHorizontal aria-hidden />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="right" align="start">
+                      <DropdownMenuGroup>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            onArchiveCustomer(customer.id, !customer.archived)
+                          }
+                        >
+                          <Archive aria-hidden />
+                          {customer.archived
+                            ? "アーカイブ解除"
+                            : "アーカイブ"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setDeleteTarget(customer)}
+                        >
+                          <Trash2 aria-hidden />
+                          削除
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </ScrollArea>
 
       <footer className="shrink-0 border-t border-sidebar-border p-3">
@@ -131,6 +257,36 @@ export function CustomerListPane({
         onOpenChange={setAddOpen}
         onAdd={onAddCustomer}
       />
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>顧客を削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              「{deleteTarget?.name}
+              」を完全に削除します。相談履歴・チャット・ネクストアクションも一緒に削除され、元に戻せません。誤作成の整理向けです。対応終了ならアーカイブを推奨します。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (!deleteTarget) return;
+                onDeleteCustomer(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              削除する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

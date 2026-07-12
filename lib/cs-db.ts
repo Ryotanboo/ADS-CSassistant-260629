@@ -100,6 +100,10 @@ export async function initTables() {
     ADD COLUMN IF NOT EXISTS ft_summary_updated_at TEXT
   `;
   await sql`
+    ALTER TABLE customers
+    ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE
+  `;
+  await sql`
     ALTER TABLE next_actions
     ADD COLUMN IF NOT EXISTS completed_at TEXT
   `;
@@ -130,7 +134,8 @@ export async function getCustomers(): Promise<Customer[]> {
       contract_start_date,
       account_manager,
       ft_summary,
-      ft_summary_updated_at
+      ft_summary_updated_at,
+      archived
     FROM customers
     ORDER BY created_at ASC
   `;
@@ -145,6 +150,7 @@ export async function getCustomers(): Promise<Customer[]> {
       r.ft_summary_updated_at != null
         ? (r.ft_summary_updated_at as string)
         : undefined,
+    archived: r.archived === true,
   }));
 }
 
@@ -158,7 +164,8 @@ export async function insertCustomer(c: Customer): Promise<void> {
       contract_start_date,
       account_manager,
       ft_summary,
-      ft_summary_updated_at
+      ft_summary_updated_at,
+      archived
     )
     VALUES (
       ${c.id},
@@ -167,10 +174,28 @@ export async function insertCustomer(c: Customer): Promise<void> {
       ${c.contractStartDate},
       ${c.accountManager},
       ${c.ftSummary ?? null},
-      ${c.ftSummaryUpdatedAt ?? null}
+      ${c.ftSummaryUpdatedAt ?? null},
+      ${c.archived ?? false}
     )
     ON CONFLICT (id) DO NOTHING
   `;
+}
+
+export async function updateCustomerArchived(
+  customerId: string,
+  archived: boolean,
+): Promise<void> {
+  const sql = getDb();
+  await sql`
+    UPDATE customers
+    SET archived = ${archived}
+    WHERE id = ${customerId}
+  `;
+}
+
+export async function deleteCustomerById(customerId: string): Promise<void> {
+  const sql = getDb();
+  await sql`DELETE FROM customers WHERE id = ${customerId}`;
 }
 
 export async function updateCustomerFtSummary(

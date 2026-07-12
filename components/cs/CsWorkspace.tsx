@@ -48,6 +48,8 @@ import {
 import {
   addCustomerAction,
   addNextActionAction,
+  archiveCustomerAction,
+  deleteCustomerAction,
   toggleNextActionAction,
   deleteNextActionAction,
   addChatMessageAction,
@@ -140,7 +142,10 @@ export function CsWorkspace({
   const hasAutoLandedRef = useRef<Set<string>>(new Set());
 
   const activeCustomer =
-    customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
+    customers.find((c) => c.id === selectedCustomerId && !c.archived) ??
+    customers.find((c) => c.id === selectedCustomerId) ??
+    customers.find((c) => !c.archived) ??
+    customers[0];
 
   const customerConsultations = useMemo(
     () =>
@@ -171,11 +176,59 @@ export function CsWorkspace({
       phase: input.phase,
       contractStartDate: "—",
       accountManager: input.accountManager,
+      archived: false,
     };
     setCustomers((prev) => [...prev, newCustomer]);
     setSelectedCustomerId(newCustomer.id);
     addCustomerAction(newCustomer).catch(console.error);
   }, []);
+
+  const archiveCustomer = useCallback(
+    (id: string, archived: boolean) => {
+      setCustomers((prev) => {
+        const next = prev.map((customer) =>
+          customer.id === id ? { ...customer, archived } : customer,
+        );
+        if (archived && selectedCustomerId === id) {
+          const nextActive =
+            next.find((customer) => !customer.archived)?.id ??
+            next[0]?.id ??
+            "";
+          setSelectedCustomerId(nextActive);
+        }
+        return next;
+      });
+      archiveCustomerAction(id, archived).catch(console.error);
+    },
+    [selectedCustomerId],
+  );
+
+  const deleteCustomer = useCallback(
+    (id: string) => {
+      setCustomers((prev) => {
+        const next = prev.filter((customer) => customer.id !== id);
+        if (selectedCustomerId === id) {
+          const nextActive =
+            next.find((customer) => !customer.archived)?.id ??
+            next[0]?.id ??
+            "";
+          setSelectedCustomerId(nextActive);
+        }
+        return next;
+      });
+      setConsultations((prev) =>
+        prev.filter((consultation) => consultation.customerId !== id),
+      );
+      setChatMessages((prev) =>
+        prev.filter((message) => message.customerId !== id),
+      );
+      setNextActions((prev) =>
+        prev.filter((action) => action.customerId !== id),
+      );
+      deleteCustomerAction(id).catch(console.error);
+    },
+    [selectedCustomerId],
+  );
 
   /**
    * 着地カードを生成して Pane 3 に表示する。
@@ -672,6 +725,8 @@ export function CsWorkspace({
             selectedCustomerId={selectedCustomerId}
             onSelectCustomer={selectCustomer}
             onAddCustomer={addCustomer}
+            onArchiveCustomer={archiveCustomer}
+            onDeleteCustomer={deleteCustomer}
           />
         </ResizablePanel>
         <ResizableHandle withHandle />

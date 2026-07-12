@@ -22,6 +22,7 @@ export const customerSchema = z.object({
   accountManager: z.string(),
   ftSummary: z.string().optional(),
   ftSummaryUpdatedAt: z.string().optional(),
+  archived: z.boolean().default(false),
 });
 export type Customer = z.infer<typeof customerSchema>;
 

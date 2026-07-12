@@ -120,7 +120,7 @@ export function NextActionPane({
                   <DropdownMenuGroup>
                     <DropdownMenuItem
                       variant="destructive"
-                      onSelect={() => onDeleteAction(action.id)}
+                      onClick={() => onDeleteAction(action.id)}
                     >
                       削除
                     </DropdownMenuItem>
