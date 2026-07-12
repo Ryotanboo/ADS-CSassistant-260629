@@ -132,9 +132,9 @@ export function AIChatPane({
   const hasMessages = messages.length > 0;
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col border-r border-border bg-background">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-primary/20 bg-primary/10 px-4">
-        <Bot aria-hidden className="size-4 shrink-0 text-primary" />
+    <section className="flex h-full min-h-0 w-full flex-col bg-canvas">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+        <Bot aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <h2 className="truncate text-sm font-semibold text-foreground">
           AIチャット
         </h2>
@@ -144,16 +144,20 @@ export function AIChatPane({
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col gap-5 p-5">
             {/* 1on1バナー */}
-            <div className="relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-chart-3 px-5 py-6 text-center">
-              <div className="flex size-14 items-center justify-center rounded-full bg-white/20">
-                <Sparkles aria-hidden className="size-7 text-white" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <p className="text-lg font-bold text-white">上司役AIとの1on1</p>
-                <p className="text-xs text-white/80">
-                  あなたの悩みや課題に、上司目線で伴走します
-                </p>
-              </div>
+            <div className="rounded-xl bg-opportunity/15 p-px">
+              <Card size="sm" className="border-0 shadow-none">
+                <CardContent className="flex items-center gap-3 px-4 py-4">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-opportunity/15">
+                    <Sparkles aria-hidden className="size-5 text-opportunity" />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-sm font-semibold">上司役AIとの1on1</p>
+                    <p className="text-xs text-muted-foreground">
+                      あなたの悩みや課題に、上司目線で伴走します
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {messages.map((message) =>
@@ -225,7 +229,7 @@ export function AIChatPane({
         </ScrollArea>
 
         {/* 入力エリア */}
-        <div className="flex shrink-0 flex-col gap-3 border-t border-primary/20 bg-primary/10 p-4">
+        <div className="flex shrink-0 flex-col gap-3 border-t border-border bg-background p-4">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">
               相談がまとまったら履歴に残せます
@@ -318,8 +322,10 @@ export function AIChatPane({
           </InputGroup>
 
           {/* grill-me カード */}
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            className="h-auto justify-start gap-3 px-3 py-2.5"
             onClick={() => {
               onStartGrillMe();
               requestAnimationFrame(() => {
@@ -327,24 +333,15 @@ export function AIChatPane({
               });
             }}
             disabled={isLoading}
-            className={cn(
-              "flex items-center gap-3 rounded-xl bg-primary px-4 py-3 text-left transition-opacity",
-              "hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50",
-              "outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-            )}
           >
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20">
-              <Lightbulb aria-hidden className="size-4 text-white" />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium text-white">
-                何から話せばいいか分からない
-              </span>
-              <span className="text-xs text-white/70">
+            <Lightbulb aria-hidden />
+            <span className="flex flex-col items-start gap-0.5">
+              <span>何から話せばいいか分からない</span>
+              <span className="text-xs font-normal text-muted-foreground">
                 AIが最初の問いかけをしてくれます
               </span>
-            </div>
-          </button>
+            </span>
+          </Button>
         </div>
       </div>
     </section>

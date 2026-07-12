@@ -36,6 +36,16 @@ import { CustomerSummaryPane } from "@/components/cs/CustomerSummaryPane";
 import { AIChatPane } from "@/components/cs/AIChatPane";
 import { NextActionPane } from "@/components/cs/NextActionPane";
 import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import {
+  CS_PANE_LAYOUT_STORAGE_ID,
+  CS_PANE_SIZE,
+  useCsPaneLayout,
+} from "@/hooks/use-cs-pane-layout";
+import {
   addCustomerAction,
   addNextActionAction,
   toggleNextActionAction,
@@ -631,6 +641,8 @@ export function CsWorkspace({
     }));
   }, []);
 
+  const { defaultLayout, onLayoutChanged } = useCsPaneLayout();
+
   if (!activeCustomer) {
     return (
       <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">
@@ -642,44 +654,80 @@ export function CsWorkspace({
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground">
       <CsGlobalHeader workspace={workspaceState} onSaveUserName={updateUserName} />
-      <div className="flex min-h-0 flex-1">
-        <CustomerListPane
-          customers={customers}
-          selectedCustomerId={selectedCustomerId}
-          onSelectCustomer={selectCustomer}
-          onAddCustomer={addCustomer}
-        />
-        <CustomerSummaryPane
-          customer={activeCustomer}
-          consultations={customerConsultations}
-          onArchiveConsultation={archiveConsultation}
-          onUpdateFtSummary={updateFtSummary}
-        />
-        <AIChatPane
-          key={activeCustomer.id}
-          messages={customerMessages}
-          onSendMessage={sendMessage}
-          onStartGrillMe={startGrillMe}
-          onArchiveSession={archiveChatSession}
-          onDiscardSession={discardChatSession}
-          onRequestLanding={requestLanding}
-          onRequestIntent={requestConversationIntent}
-          onAddActionFromLanding={addAction}
-          isLoading={isAiLoading}
-          isArchiving={isArchivingChat}
-          isGeneratingLanding={isGeneratingLanding}
-          streamingContent={streamingContent}
-          errorMessage={aiError}
-        />
-        <NextActionPane
-          key={`actions-${activeCustomer.id}`}
-          actions={customerActions}
-          onToggleAction={toggleAction}
-          onUpdateActionResult={updateActionResult}
-          onAddAction={addAction}
-          onDeleteAction={deleteAction}
-        />
-      </div>
+      <ResizablePanelGroup
+        id={CS_PANE_LAYOUT_STORAGE_ID}
+        orientation="horizontal"
+        defaultLayout={defaultLayout}
+        onLayoutChanged={onLayoutChanged}
+        className="min-h-0 flex-1"
+      >
+        <ResizablePanel
+          id="customers"
+          defaultSize={CS_PANE_SIZE.customers.defaultSize}
+          minSize={CS_PANE_SIZE.customers.minSize}
+          maxSize={CS_PANE_SIZE.customers.maxSize}
+        >
+          <CustomerListPane
+            customers={customers}
+            selectedCustomerId={selectedCustomerId}
+            onSelectCustomer={selectCustomer}
+            onAddCustomer={addCustomer}
+          />
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel
+          id="summary"
+          defaultSize={CS_PANE_SIZE.summary.defaultSize}
+          minSize={CS_PANE_SIZE.summary.minSize}
+          maxSize={CS_PANE_SIZE.summary.maxSize}
+        >
+          <CustomerSummaryPane
+            customer={activeCustomer}
+            consultations={customerConsultations}
+            onArchiveConsultation={archiveConsultation}
+            onUpdateFtSummary={updateFtSummary}
+          />
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel
+          id="chat"
+          defaultSize={CS_PANE_SIZE.chat.defaultSize}
+          minSize={CS_PANE_SIZE.chat.minSize}
+        >
+          <AIChatPane
+            key={activeCustomer.id}
+            messages={customerMessages}
+            onSendMessage={sendMessage}
+            onStartGrillMe={startGrillMe}
+            onArchiveSession={archiveChatSession}
+            onDiscardSession={discardChatSession}
+            onRequestLanding={requestLanding}
+            onRequestIntent={requestConversationIntent}
+            onAddActionFromLanding={addAction}
+            isLoading={isAiLoading}
+            isArchiving={isArchivingChat}
+            isGeneratingLanding={isGeneratingLanding}
+            streamingContent={streamingContent}
+            errorMessage={aiError}
+          />
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel
+          id="actions"
+          defaultSize={CS_PANE_SIZE.actions.defaultSize}
+          minSize={CS_PANE_SIZE.actions.minSize}
+          maxSize={CS_PANE_SIZE.actions.maxSize}
+        >
+          <NextActionPane
+            key={`actions-${activeCustomer.id}`}
+            actions={customerActions}
+            onToggleAction={toggleAction}
+            onUpdateActionResult={updateActionResult}
+            onAddAction={addAction}
+            onDeleteAction={deleteAction}
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

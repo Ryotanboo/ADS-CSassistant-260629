@@ -70,7 +70,7 @@ export function CustomerSummaryPane({
   onUpdateFtSummary,
 }: CustomerSummaryPaneProps) {
   return (
-    <section className="flex w-[300px] shrink-0 flex-col border-r border-border bg-background">
+    <section className="flex h-full min-h-0 w-full flex-col bg-background">
       <header className="flex h-12 shrink-0 items-center border-b border-border px-3">
         <h2 className="truncate text-sm font-semibold text-foreground">
           顧客サマリ

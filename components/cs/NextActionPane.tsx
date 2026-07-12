@@ -39,7 +39,7 @@ export function NextActionPane({
   const [addOpen, setAddOpen] = useState(false);
 
   return (
-    <section className="flex w-[280px] shrink-0 flex-col bg-background">
+    <section className="flex h-full min-h-0 w-full flex-col bg-background">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <ListChecks aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <h2 className="truncate text-sm font-semibold text-foreground">

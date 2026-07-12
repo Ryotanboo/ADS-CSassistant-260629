@@ -21,15 +21,18 @@ const badgeVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         // CS アシスタント用: フェーズ・相談種別・優先度
         "phase-free-trial": "bg-muted text-muted-foreground",
-        "phase-onboarding": "bg-chart-3/15 text-chart-3 dark:bg-chart-3/20",
-        "phase-adoption": "bg-chart-1/15 text-chart-1 dark:bg-chart-1/20",
-        "phase-success": "bg-chart-2/15 text-chart-2 dark:bg-chart-2/20",
+        "phase-onboarding":
+          "border border-chart-3/30 bg-chart-3/18 text-chart-3 dark:bg-chart-3/25",
+        "phase-adoption":
+          "border border-chart-1/30 bg-chart-1/18 text-chart-1 dark:bg-chart-1/25",
+        "phase-success":
+          "border border-chart-2/30 bg-chart-2/18 text-chart-2 dark:bg-chart-2/25",
         "phase-churn-risk":
           "bg-destructive/10 text-destructive dark:bg-destructive/20",
-        "consultation-issue": "bg-chart-5/15 text-chart-5 dark:bg-chart-5/20",
-        "consultation-action": "bg-chart-1/15 text-chart-1 dark:bg-chart-1/20",
+        "consultation-issue": "bg-chart-5/18 text-chart-5 dark:bg-chart-5/25",
+        "consultation-action": "bg-chart-4/18 text-chart-4 dark:bg-chart-4/25",
         "priority-high": "bg-destructive/10 text-destructive dark:bg-destructive/20",
-        "priority-medium": "bg-chart-3/15 text-chart-3 dark:bg-chart-3/20",
+        "priority-medium": "bg-chart-3/18 text-chart-3 dark:bg-chart-3/25",
         "priority-low": "bg-muted text-muted-foreground",
       },
       size: {

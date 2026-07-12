@@ -63,15 +63,13 @@ export function CustomerListPane({
   }, [customers, query]);
 
   return (
-    <section className="flex w-[260px] shrink-0 flex-col border-r border-border bg-background">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
+    <section className="flex h-full min-h-0 w-full flex-col bg-sidebar text-sidebar-foreground">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-sidebar-border px-3">
         <Building2
           aria-hidden
-          className="size-4 shrink-0 text-muted-foreground"
+          className="size-4 shrink-0 text-sidebar-foreground/70"
         />
-        <h2 className="truncate text-sm font-semibold text-foreground">
-          顧客リスト
-        </h2>
+        <h2 className="truncate text-sm font-semibold">顧客リスト</h2>
       </header>
 
       <div className="shrink-0 px-3 py-3">
@@ -101,8 +99,8 @@ export function CustomerListPane({
                     "flex w-full flex-col gap-1.5 rounded-md px-2.5 py-2.5 text-left transition-colors",
                     "outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                     selected
-                      ? "bg-accent text-accent-foreground"
-                      : "text-foreground hover:bg-muted",
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "hover:bg-sidebar-accent/60",
                   )}
                 >
                   <span className="truncate text-sm">{customer.name}</span>
@@ -116,7 +114,7 @@ export function CustomerListPane({
         </ul>
       </ScrollArea>
 
-      <footer className="shrink-0 border-t border-border p-3">
+      <footer className="shrink-0 border-t border-sidebar-border p-3">
         <Button
           type="button"
           variant="outline"

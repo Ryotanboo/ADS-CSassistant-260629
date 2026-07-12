@@ -45,6 +45,12 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-canvas: var(--canvas);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand: var(--brand);
+  --color-opportunity: var(--opportunity);
+  --color-risk: var(--risk);
+  --color-excess: var(--excess);
+  --color-series: var(--series);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -85,6 +91,12 @@
   --card: oklch(0.9972 0.0028 84.5587);
   --card-foreground: oklch(0.2354 0.0019 286.2536);
   --canvas: oklch(0.985 0.005 84);
+  --brand: oklch(0.2354 0.0019 286.2536);
+  --brand-foreground: oklch(0.9816 0.0017 247.839);
+  --opportunity: oklch(0.6441 0.0496 146.8813);
+  --risk: oklch(0.5624 0.0956 20.5303);
+  --excess: oklch(0.6318 0.06 244.8148);
+  --series: oklch(0.7107 0.0351 256.7878);
   --popover: oklch(0.9972 0.0028 84.5587);
   --popover-foreground: oklch(0.2354 0.0019 286.2536);
   --primary: oklch(0.3732 0.0635 258.276);
@@ -206,23 +218,137 @@
   --shadow-2xl: 0px 10px 20px 0px hsl(0 0% 0% / 0.75);
 }
 
-/* CSアシスタント専用カラーテーマ（/cs ルートのみに適用） */
+/* CSアシスタント専用カラーテーマ（/cs ルートのみに適用）
+   Stories Contrast: 黒ヘッダー × 青アクセント × 鮮やかなフェーズタグ */
 .cs-theme {
   --background: oklch(1 0 0);
+  --foreground: oklch(0.15 0 0);
   --card: oklch(1 0 0);
-  --border: oklch(0.92 0.005 80);
-  --muted: oklch(0.97 0.005 80);
-  --muted-foreground: oklch(0.52 0.01 80);
-  --primary: oklch(0.70 0.24 48);
-  --primary-foreground: oklch(0.99 0.01 55);
-  --ring: oklch(0.70 0.24 48);
-  --accent: oklch(0.95 0.05 75);
-  --accent-foreground: oklch(0.42 0.15 48);
-  --sidebar-primary: oklch(0.70 0.24 48);
-  --sidebar-primary-foreground: oklch(0.99 0.01 55);
-  --sidebar-ring: oklch(0.70 0.24 48);
-  --secondary-foreground: oklch(0.42 0.15 48);
-  --chart-3: oklch(0.82 0.18 75);
+  --card-foreground: oklch(0.15 0 0);
+  --canvas: oklch(0.98 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0 0);
+  --brand: oklch(0.15 0 0);
+  --brand-foreground: oklch(0.99 0 0);
+  --opportunity: oklch(0.62 0.15 155);
+  --risk: oklch(0.58 0.16 22);
+  --excess: oklch(0.65 0.12 230);
+  --series: oklch(0.58 0.16 290);
+  --primary: oklch(0.42 0.14 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --destructive: var(--risk);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.35 0.02 255);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.55 0.01 255);
+  --accent: oklch(0.86 0.15 95);
+  --accent-foreground: oklch(0.25 0.04 80);
+  --border: oklch(0.91 0.005 255);
+  --input: oklch(0.91 0.005 255);
+  --ring: oklch(0.86 0.15 95);
+  /* フェーズ Badge: amber / violet / emerald */
+  --chart-1: var(--series);
+  --chart-2: var(--opportunity);
+  --chart-3: oklch(0.68 0.16 55);
+  --chart-4: var(--excess);
+  --chart-5: oklch(0.58 0.14 330);
+  --sidebar: oklch(0.98 0 0);
+  --sidebar-foreground: oklch(0.15 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.95 0.025 250);
+  --sidebar-accent-foreground: oklch(0.42 0.14 255);
+  --sidebar-border: oklch(0.91 0.005 255);
+  --sidebar-ring: oklch(0.42 0.14 255);
+}
+
+/* CSアシスタント配色比較モック。選定後に採用案だけを `.cs-theme` へ統合する。
+   参考: Surprise Stories 図解（白×黒×青×ゴールドのエディトリアル調）
+   `.cs-theme` ラッパー（app/cs/layout.tsx）より詳細度を上げて確実に上書きする。 */
+.cs-theme .cs-preview-stories-light,
+.cs-preview-stories-light {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.15 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0 0);
+  --canvas: oklch(0.98 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0 0);
+  --brand: oklch(1 0 0);
+  --brand-foreground: oklch(0.15 0 0);
+  --opportunity: oklch(0.62 0.15 155);
+  --risk: oklch(0.58 0.16 22);
+  --excess: oklch(0.65 0.12 230);
+  --series: oklch(0.58 0.16 290);
+  --primary: oklch(0.42 0.14 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --destructive: var(--risk);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.35 0.02 255);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.55 0.01 255);
+  --accent: oklch(0.95 0.025 250);
+  --accent-foreground: oklch(0.42 0.14 255);
+  --border: oklch(0.91 0.005 255);
+  --input: oklch(0.91 0.005 255);
+  --ring: oklch(0.42 0.14 255);
+  /* フェーズ Badge: 明度・彩度を上げた amber / violet / emerald */
+  --chart-1: var(--series);
+  --chart-2: var(--opportunity);
+  --chart-3: oklch(0.68 0.16 55);
+  --chart-4: var(--excess);
+  --chart-5: oklch(0.58 0.14 330);
+  --sidebar: oklch(0.98 0 0);
+  --sidebar-foreground: oklch(0.15 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.95 0.025 250);
+  --sidebar-accent-foreground: oklch(0.42 0.14 255);
+  --sidebar-border: oklch(0.91 0.005 255);
+  --sidebar-ring: oklch(0.42 0.14 255);
+}
+
+.cs-theme .cs-preview-stories-contrast,
+.cs-preview-stories-contrast {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.15 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0 0);
+  --canvas: oklch(0.98 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0 0);
+  --brand: oklch(0.15 0 0);
+  --brand-foreground: oklch(0.99 0 0);
+  --opportunity: oklch(0.62 0.15 155);
+  --risk: oklch(0.58 0.16 22);
+  --excess: oklch(0.65 0.12 230);
+  --series: oklch(0.58 0.16 290);
+  --primary: oklch(0.42 0.14 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --destructive: var(--risk);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.35 0.02 255);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.55 0.01 255);
+  --accent: oklch(0.86 0.15 95);
+  --accent-foreground: oklch(0.25 0.04 80);
+  --border: oklch(0.91 0.005 255);
+  --input: oklch(0.91 0.005 255);
+  --ring: oklch(0.86 0.15 95);
+  /* フェーズ Badge: 明度・彩度を上げた amber / violet / emerald */
+  --chart-1: var(--series);
+  --chart-2: var(--opportunity);
+  --chart-3: oklch(0.68 0.16 55);
+  --chart-4: var(--excess);
+  --chart-5: oklch(0.58 0.14 330);
+  --sidebar: oklch(0.98 0 0);
+  --sidebar-foreground: oklch(0.15 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.95 0.025 250);
+  --sidebar-accent-foreground: oklch(0.42 0.14 255);
+  --sidebar-border: oklch(0.91 0.005 255);
+  --sidebar-ring: oklch(0.42 0.14 255);
 }
 
 @layer base {

@@ -44,20 +44,19 @@ export function CsGlobalHeader({
   };
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-4">
+    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-brand px-4 text-brand-foreground shadow-sm">
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <Sparkles aria-hidden className="size-4 shrink-0 text-primary" />
-        <h1 className="truncate text-sm font-semibold text-foreground">
-          {workspace.name}
-        </h1>
+        <div className="flex size-7 items-center justify-center rounded-lg bg-brand-foreground/10">
+          <Sparkles aria-hidden className="size-4 shrink-0" />
+        </div>
+        <h1 className="truncate text-sm font-semibold">{workspace.name}</h1>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
         <Button
           type="button"
-          variant="ghost"
+          variant="ghost-inverse"
           size="icon-sm"
-          className="text-muted-foreground"
           aria-label="通知"
         >
           <Bell aria-hidden />
@@ -65,7 +64,9 @@ export function CsGlobalHeader({
 
         <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
           <DialogTrigger
-            render={<Button type="button" variant="ghost" size="sm" />}
+            render={
+              <Button type="button" variant="ghost-inverse" size="sm" />
+            }
           >
             <Avatar className="size-7">
               <AvatarFallback>{userInitial}</AvatarFallback>
