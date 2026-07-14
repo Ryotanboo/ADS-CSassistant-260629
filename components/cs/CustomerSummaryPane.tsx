@@ -413,9 +413,13 @@ function ConsultationTranscriptDialog({
                 <span className="text-xs text-muted-foreground">
                   {message.kind === "intent"
                     ? "進行操作"
-                    : message.role === "user"
-                      ? "担当CS"
-                      : "上司役AI"}
+                    : message.kind === "proposal_document"
+                      ? "提案文書"
+                      : message.kind === "proposal_question"
+                        ? "提案の問い"
+                        : message.role === "user"
+                          ? "担当CS"
+                          : "上司役AI"}
                   {message.timestamp ? `・${message.timestamp}` : ""}
                 </span>
                 <p className="text-sm whitespace-pre-wrap text-foreground">

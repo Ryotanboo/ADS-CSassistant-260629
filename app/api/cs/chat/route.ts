@@ -3,6 +3,10 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { buildSystemPrompt } from "@/lib/cs-ai-prompt";
 import {
+  buildProposalSystemPrompt,
+  findProposalSessionStartIndex,
+} from "@/lib/cs-proposal-prompt";
+import {
   customerSchema,
   chatMessageSchema,
   consultationSchema,
@@ -14,6 +18,7 @@ const requestSchema = z.object({
   messages: z.array(chatMessageSchema),
   consultations: z.array(consultationSchema).default([]),
   nextActions: z.array(nextActionSchema).default([]),
+  proposalMode: z.boolean().default(false),
 });
 
 export async function POST(req: NextRequest) {
@@ -56,8 +61,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { customer, messages, consultations, nextActions } = parsed.data;
-  const systemPrompt = buildSystemPrompt(customer, consultations, nextActions);
+  const { customer, messages, consultations, nextActions, proposalMode } =
+    parsed.data;
+
+  // クライアントフラグに加え、直近の提案開始境界でも検証する
+  const proposalStart = findProposalSessionStartIndex(messages);
+  const useProposalMode = proposalMode && proposalStart >= 0;
+  const sessionMessages = useProposalMode
+    ? messages.slice(proposalStart)
+    : messages;
+
+  const systemPrompt = useProposalMode
+    ? buildProposalSystemPrompt(customer, consultations, nextActions)
+    : buildSystemPrompt(customer, consultations, nextActions);
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
@@ -66,8 +82,8 @@ export async function POST(req: NextRequest) {
   });
 
   // Gemini の history 形式へ変換（最後のユーザーメッセージは history に含めない）
-  const historyMessages = messages.slice(0, -1);
-  const lastMessage = messages[messages.length - 1];
+  const historyMessages = sessionMessages.slice(0, -1);
+  const lastMessage = sessionMessages[sessionMessages.length - 1];
 
   if (!lastMessage || lastMessage.role !== "user") {
     return new Response(

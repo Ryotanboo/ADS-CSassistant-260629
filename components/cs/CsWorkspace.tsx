@@ -24,9 +24,12 @@ import {
   type Customer,
   type LandingCard,
   type NextAction,
+  type ProposalAudience,
+  type ProposalQuestionCard,
 } from "@/lib/cs-schema";
 import { GRILL_ME_FIRST_MESSAGE } from "@/lib/cs-ai-prompt";
 import { CONVERSATION_INTENT_PROMPTS } from "@/lib/cs-conversation-intents";
+import { isProposalModeActive } from "@/lib/cs-proposal-prompt";
 import { CsGlobalHeader } from "@/components/cs/CsGlobalHeader";
 import {
   CustomerListPane,
@@ -77,10 +80,16 @@ function nowTimestamp() {
   });
 }
 
-/** meta ブロック [[meta]]...[[/meta]] を解析する */
+/** meta ブロック [[meta]]...[[/meta]] を解析する（通常 / 提案は排他） */
 function parseMeta(content: string): {
   cleanContent: string;
   readyToLand: boolean;
+  proposal: {
+    phase: "ask" | "document";
+    options?: ProposalQuestionCard["options"];
+    recommended?: string;
+    audience?: ProposalAudience;
+  } | null;
 } {
   const metaMatch = content.match(/\[\[meta\]\]([\s\S]*?)\[\[\/meta\]\]/);
   const cleanContent = content
@@ -88,19 +97,57 @@ function parseMeta(content: string): {
     .trimEnd();
 
   if (!metaMatch) {
-    return { cleanContent, readyToLand: false };
+    return { cleanContent, readyToLand: false, proposal: null };
   }
 
   try {
     const meta = JSON.parse(metaMatch[1]) as {
       readyToLand?: boolean;
+      mode?: string;
+      phase?: string;
+      options?: { id?: string; label?: string }[];
+      recommended?: string;
+      audience?: string;
     };
+
+    if (meta.mode === "proposal") {
+      const options = Array.isArray(meta.options)
+        ? meta.options
+            .filter(
+              (option): option is { id: string; label: string } =>
+                typeof option?.id === "string" &&
+                typeof option?.label === "string",
+            )
+            .map((option) => ({ id: option.id, label: option.label }))
+        : undefined;
+      const audience =
+        meta.audience === "customer" || meta.audience === "internal"
+          ? meta.audience
+          : undefined;
+
+      return {
+        cleanContent,
+        readyToLand: false,
+        proposal: {
+          phase: meta.phase === "document" ? "document" : "ask",
+          options:
+            options && options.length > 0 ? options : undefined,
+          recommended:
+            typeof meta.recommended === "string"
+              ? meta.recommended
+              : undefined,
+          audience,
+        },
+      };
+    }
+
     return {
       cleanContent,
       readyToLand: meta.readyToLand === true,
+      proposal: null,
     };
   } catch {
-    return { cleanContent, readyToLand: false };
+    return { cleanContent, readyToLand: false, proposal: null };
   }
 }
 
@@ -164,6 +211,37 @@ export function CsWorkspace({
     () => nextActions.filter((a) => a.customerId === activeCustomer?.id),
     [nextActions, activeCustomer?.id],
   );
+
+  const proposalMode = useMemo(
+    () => isProposalModeActive(customerMessages),
+    [customerMessages],
+  );
+
+  const hasPendingActions = useMemo(
+    () => customerActions.some((action) => !action.completed),
+    [customerActions],
+  );
+
+  const latestProposalDocument = useMemo(() => {
+    for (let i = customerMessages.length - 1; i >= 0; i--) {
+      const message = customerMessages[i];
+      if (message.kind === "proposal_document") return message;
+    }
+    return null;
+  }, [customerMessages]);
+
+  const proposalAudience = useMemo((): ProposalAudience | null => {
+    for (let i = customerMessages.length - 1; i >= 0; i--) {
+      const message = customerMessages[i];
+      if (
+        message.kind === "proposal_question" &&
+        message.proposalCard?.audience
+      ) {
+        return message.proposalCard.audience;
+      }
+    }
+    return null;
+  }, [customerMessages]);
 
   const selectCustomer = useCallback((id: string) => {
     setSelectedCustomerId(id);
@@ -242,7 +320,13 @@ export function CsWorkspace({
       contextActions: NextAction[],
     ) => {
       if (isGeneratingLanding || isFetchingRef.current) return;
-      const textMessages = messages.filter((m) => m.kind !== "landing");
+      const textMessages = messages.filter(
+        (m) =>
+          m.kind !== "landing" &&
+          m.kind !== "proposal_question" &&
+          m.kind !== "proposal_document" &&
+          !(m.kind === "intent" && m.intent === "proposal"),
+      );
       if (textMessages.length === 0) return;
 
       setIsGeneratingLanding(true);
@@ -318,6 +402,7 @@ export function CsWorkspace({
       customer: Customer,
       contextConsultations: Consultation[],
       contextActions: NextAction[],
+      options?: { proposalMode?: boolean },
     ) => {
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
@@ -325,6 +410,8 @@ export function CsWorkspace({
       setStreamingContent("");
       setAiError(null);
 
+      const inProposalMode =
+        options?.proposalMode ?? isProposalModeActive(messagesWithUser);
       let fullContent = "";
 
       try {
@@ -336,6 +423,7 @@ export function CsWorkspace({
             messages: messagesWithUser,
             consultations: contextConsultations,
             nextActions: contextActions,
+            proposalMode: inProposalMode,
           }),
         });
 
@@ -383,26 +471,48 @@ export function CsWorkspace({
         }
 
         // meta ブロックを解析して本文をクリーン化
-        const { cleanContent, readyToLand } = parseMeta(fullContent);
+        const { cleanContent, readyToLand, proposal } = parseMeta(fullContent);
 
         if (!cleanContent) {
           throw new Error("AIから返答が得られませんでした。");
         }
 
-        // ストリーミング完了 → AIメッセージを確定してDBに保存
         const aiMessage: ChatMessage = {
           id: `msg-${Date.now()}`,
           customerId: customer.id,
           role: "assistant",
           content: cleanContent,
           timestamp: nowTimestamp(),
-          kind: "text",
+          kind:
+            inProposalMode && proposal?.phase === "document"
+              ? "proposal_document"
+              : inProposalMode &&
+                  proposal?.phase === "ask" &&
+                  proposal.options &&
+                  proposal.options.length > 0
+                ? "proposal_question"
+                : "text",
+          proposalCard:
+            inProposalMode &&
+            proposal?.phase === "ask" &&
+            proposal.options &&
+            proposal.options.length > 0
+              ? {
+                  options: proposal.options,
+                  recommended: proposal.recommended,
+                  audience: proposal.audience,
+                }
+              : undefined,
         };
         setChatMessages((prev) => [...prev, aiMessage]);
         addChatMessageAction(aiMessage).catch(console.error);
 
-        // 自動着地: readyToLand が true かつ未実行の場合のみ
-        if (readyToLand && !hasAutoLandedRef.current.has(customer.id)) {
+        // 自動着地: 提案モード中は抑制。readyToLand が true かつ未実行の場合のみ
+        if (
+          !inProposalMode &&
+          readyToLand &&
+          !hasAutoLandedRef.current.has(customer.id)
+        ) {
           hasAutoLandedRef.current.add(customer.id);
           const updatedMessages = [
             ...messagesWithUser.filter((m) => m.kind !== "landing"),
@@ -457,6 +567,7 @@ export function CsWorkspace({
         activeCustomer,
         customerConsultations,
         customerActions,
+        { proposalMode: isProposalModeActive(updatedMessages) },
       ).catch(console.error);
     },
     [
@@ -471,6 +582,8 @@ export function CsWorkspace({
   const requestConversationIntent = useCallback(
     (intent: ConversationIntent) => {
       if (!activeCustomer || isFetchingRef.current) return;
+      if (intent === "proposal") return;
+      if (isProposalModeActive(customerMessages)) return;
 
       const intentMessage: ChatMessage = {
         id: `msg-${Date.now()}`,
@@ -489,6 +602,7 @@ export function CsWorkspace({
         activeCustomer,
         customerConsultations,
         customerActions,
+        { proposalMode: false },
       ).catch(console.error);
     },
     [
@@ -500,8 +614,57 @@ export function CsWorkspace({
     ],
   );
 
+  const startProposalMode = useCallback(() => {
+    if (!activeCustomer || isFetchingRef.current) return;
+    if (isProposalModeActive(customerMessages)) return;
+
+    const intentMessage: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      customerId: activeCustomer.id,
+      role: "user",
+      content: CONVERSATION_INTENT_PROMPTS.proposal,
+      timestamp: nowTimestamp(),
+      kind: "intent",
+      intent: "proposal",
+    };
+    const updatedMessages = [...customerMessages, intentMessage];
+    setChatMessages((prev) => [...prev, intentMessage]);
+    addChatMessageAction(intentMessage).catch(console.error);
+    callAiStream(
+      updatedMessages,
+      activeCustomer,
+      customerConsultations,
+      customerActions,
+      { proposalMode: true },
+    ).catch(console.error);
+  }, [
+    activeCustomer,
+    customerMessages,
+    customerConsultations,
+    customerActions,
+    callAiStream,
+  ]);
+
+  const exitProposalMode = useCallback(() => {
+    if (!activeCustomer || isFetchingRef.current) return;
+    if (!isProposalModeActive(customerMessages)) return;
+
+    const exitMessage: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      customerId: activeCustomer.id,
+      role: "assistant",
+      content:
+        "提案モードを終了しました。通常の相談に戻ります。引き続き壁打ちや整理が必要なら話してください。",
+      timestamp: nowTimestamp(),
+      kind: "text",
+    };
+    setChatMessages((prev) => [...prev, exitMessage]);
+    addChatMessageAction(exitMessage).catch(console.error);
+  }, [activeCustomer, customerMessages]);
+
   const startGrillMe = useCallback(() => {
     if (!activeCustomer || isFetchingRef.current) return;
+    if (isProposalModeActive(customerMessages)) return;
 
     // Grill Me: AIからの最初の問いかけをすぐ表示（DB保存も）
     const grillMessage: ChatMessage = {
@@ -514,10 +677,11 @@ export function CsWorkspace({
     };
     setChatMessages((prev) => [...prev, grillMessage]);
     addChatMessageAction(grillMessage).catch(console.error);
-  }, [activeCustomer]);
+  }, [activeCustomer, customerMessages]);
 
   const requestLanding = useCallback(() => {
     if (!activeCustomer) return;
+    if (isProposalModeActive(customerMessages)) return;
     generateLanding(
       activeCustomer,
       customerMessages,
@@ -758,7 +922,13 @@ export function CsWorkspace({
             onDiscardSession={discardChatSession}
             onRequestLanding={requestLanding}
             onRequestIntent={requestConversationIntent}
+            onStartProposalMode={startProposalMode}
+            onExitProposalMode={exitProposalMode}
             onAddActionFromLanding={addAction}
+            proposalMode={proposalMode}
+            proposalAudience={proposalAudience}
+            hasPendingActions={hasPendingActions}
+            latestProposalDocument={latestProposalDocument}
             isLoading={isAiLoading}
             isArchiving={isArchivingChat}
             isGeneratingLanding={isGeneratingLanding}

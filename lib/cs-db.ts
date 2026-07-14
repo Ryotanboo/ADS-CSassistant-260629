@@ -12,6 +12,7 @@
 import { neon } from "@neondatabase/serverless";
 import {
   landingCardSchema,
+  proposalQuestionCardSchema,
   type ChatMessage,
   type Consultation,
   type Customer,
@@ -363,18 +364,49 @@ export async function updateNextActionResult(
 // chat_messages
 // ─────────────────────────────────────────────
 
+function mapChatMessageKind(
+  kind: unknown,
+): ChatMessage["kind"] {
+  if (
+    kind === "landing" ||
+    kind === "intent" ||
+    kind === "proposal_question" ||
+    kind === "proposal_document" ||
+    kind === "text"
+  ) {
+    return kind;
+  }
+  console.warn("[cs-db] unknown chat message kind, fallback to text:", kind);
+  return "text";
+}
+
+function mapChatMessageIntent(
+  intent: unknown,
+): ChatMessage["intent"] {
+  if (
+    intent === "perspective" ||
+    intent === "actions" ||
+    intent === "proposal"
+  ) {
+    return intent;
+  }
+  return undefined;
+}
+
 function mapChatMessageRow(r: Record<string, unknown>): ChatMessage {
-  const kind =
-    r.kind === "landing"
-      ? ("landing" as const)
-      : r.kind === "intent"
-        ? ("intent" as const)
-        : ("text" as const);
+  const kind = mapChatMessageKind(r.kind);
   let card: ChatMessage["card"] = undefined;
+  let proposalCard: ChatMessage["proposalCard"] = undefined;
+
   if (kind === "landing" && r.card != null) {
     const parsed = landingCardSchema.safeParse(r.card);
     if (parsed.success) card = parsed.data;
   }
+  if (kind === "proposal_question" && r.card != null) {
+    const parsed = proposalQuestionCardSchema.safeParse(r.card);
+    if (parsed.success) proposalCard = parsed.data;
+  }
+
   return {
     id: r.id as string,
     customerId: r.customer_id as string,
@@ -384,10 +416,8 @@ function mapChatMessageRow(r: Record<string, unknown>): ChatMessage {
     timestamp: r.timestamp != null ? (r.timestamp as string) : undefined,
     kind,
     card,
-    intent:
-      r.intent === "perspective" || r.intent === "actions"
-        ? r.intent
-        : undefined,
+    proposalCard,
+    intent: mapChatMessageIntent(r.intent),
   };
 }
 
@@ -417,7 +447,13 @@ export async function getAllChatMessages(): Promise<ChatMessage[]> {
 export async function insertChatMessage(m: ChatMessage): Promise<void> {
   const sql = getDb();
   const kind = m.kind ?? "text";
-  const card = m.card != null ? JSON.stringify(m.card) : null;
+  const cardPayload =
+    kind === "landing" && m.card != null
+      ? m.card
+      : kind === "proposal_question" && m.proposalCard != null
+        ? m.proposalCard
+        : null;
+  const card = cardPayload != null ? JSON.stringify(cardPayload) : null;
   await sql`
     INSERT INTO chat_messages (
       id,
@@ -485,15 +521,21 @@ function parseTranscript(value: unknown): ChatMessage[] | undefined {
               typeof message.timestamp === "string"
                 ? message.timestamp
                 : undefined,
-            kind:
-              message.kind === "landing"
-                ? ("landing" as const)
-                : message.kind === "intent"
-                  ? ("intent" as const)
-                  : ("text" as const),
-            intent:
-              message.intent === "perspective" || message.intent === "actions"
-                ? message.intent
+            kind: mapChatMessageKind(message.kind),
+            intent: mapChatMessageIntent(message.intent),
+            card:
+              message.kind === "landing" && message.card != null
+                ? landingCardSchema.safeParse(message.card).success
+                  ? (message.card as ChatMessage["card"])
+                  : undefined
+                : undefined,
+            proposalCard:
+              message.kind === "proposal_question" &&
+              message.proposalCard != null
+                ? proposalQuestionCardSchema.safeParse(message.proposalCard)
+                    .success
+                  ? message.proposalCard
+                  : undefined
                 : undefined,
           },
         ];
