@@ -16,6 +16,7 @@ import {
   updateNextActionCompleted,
   updateNextActionResult,
   updateWorkspaceUserName,
+  updateAllCustomersAccountManager,
 } from "@/lib/cs-db";
 import { buildConsultationSummaryPrompt } from "@/lib/cs-ai-prompt";
 import type {
@@ -120,7 +121,10 @@ export async function updateWorkspaceUserNameAction(name: string) {
   if (!normalized) {
     throw new Error("名前を入力してください");
   }
-  await updateWorkspaceUserName(normalized.slice(0, 80));
+  const sliced = normalized.slice(0, 80);
+  // 一人利用前提: 登録名と顧客の社内担当CSを揃える
+  await updateWorkspaceUserName(sliced);
+  await updateAllCustomersAccountManager(sliced);
   revalidatePath("/cs");
 }
 

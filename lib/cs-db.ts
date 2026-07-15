@@ -628,3 +628,13 @@ export async function updateWorkspaceUserName(name: string): Promise<void> {
       updated_at = NOW()
   `;
 }
+
+export async function updateAllCustomersAccountManager(
+  accountManager: string,
+): Promise<void> {
+  const sql = getDb();
+  await sql`
+    UPDATE customers
+    SET account_manager = ${accountManager}
+  `;
+}

@@ -103,7 +103,7 @@ export function CustomerSummaryPane({
               <Separator />
               <SummaryRow
                 icon={User}
-                label="アカウントマネージャー"
+                label="社内の担当CS"
                 value={customer.accountManager}
               />
             </CardContent>

@@ -6,6 +6,7 @@ import {
   getAllConsultations,
   getWorkspaceUser,
   initTables,
+  updateAllCustomersAccountManager,
 } from "@/lib/cs-db";
 import workspaceData from "@/data/cs-workspace.json";
 import consultationsData from "@/data/consultations.json";
@@ -35,10 +36,20 @@ export default async function CsPage() {
       getWorkspaceUser(wsResult.data.currentUser.name),
     ]);
 
+  // 一人利用前提: 登録名と顧客の社内担当CSを揃える
+  let syncedCustomers = customers;
+  if (
+    currentUser.name &&
+    customers.some((customer) => customer.accountManager !== currentUser.name)
+  ) {
+    await updateAllCustomersAccountManager(currentUser.name);
+    syncedCustomers = await getCustomers();
+  }
+
   // 相談履歴はデモ初期データ + DB保存された相談ログを表示する
   return (
     <CsWorkspace
-      initialCustomers={customers}
+      initialCustomers={syncedCustomers}
       initialConsultations={[
         ...consultationsResult.data,
         ...savedConsultations,

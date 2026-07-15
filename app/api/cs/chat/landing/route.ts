@@ -15,6 +15,7 @@ const requestSchema = z.object({
   messages: z.array(chatMessageSchema),
   consultations: z.array(consultationSchema).default([]),
   nextActions: z.array(nextActionSchema).default([]),
+  currentUserName: z.string().min(1).default("担当CS"),
 });
 
 export async function POST(req: NextRequest) {
@@ -48,12 +49,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { customer, messages, consultations, nextActions } = parsed.data;
+  const { customer, messages, consultations, nextActions, currentUserName } =
+    parsed.data;
   const prompt = buildLandingPrompt(
     customer,
     messages,
     consultations,
     nextActions,
+    currentUserName,
   );
 
   const genAI = new GoogleGenerativeAI(apiKey);

@@ -86,6 +86,7 @@ export function buildSystemPrompt(
   customer: Customer,
   consultations: Consultation[] = [],
   nextActions: NextAction[] = [],
+  currentUserName = "担当CS",
 ): string {
   return `あなたは経験豊富なカスタマーサクセス部門のシニアマネージャーです。
 担当CSメンバーが顧客対応について相談してきたとき、「上司役」として1on1形式で伴走してください。
@@ -142,11 +143,21 @@ export function buildSystemPrompt(
 - このブロックはUIが解析するため、フォーマットを厳守する（改行なし・JSON形式）
 - メタブロックの前に改行を1つ入れる。メタブロックの後には何も書かない
 
+## あなたの対話相手（CSメンバー）
+- 名前: ${currentUserName}
+- 役割: いまこのチャットで相談している担当者。あなたはこの人に話しかける
+- この人を「山田」など別の人名で呼ばない。シードデータの名前と混同しない
+
 ## 現在の対応顧客情報
 - 顧客名: ${customer.name}
 - 現在フェーズ: ${phaseLabel[customer.phase]}
 - 契約開始: ${customer.contractStartDate}
-- 担当者: ${customer.accountManager}
+- 社内の担当CS: ${customer.accountManager}（顧客側の決裁者・キーパーソンではない）
+
+## 人名の扱い
+- 顧客側の担当者・決裁者の名前は、会話で明示されるまで推測で決めない
+- 「社内の担当CS」の名前を、顧客側の人名として使わない
+- 未確認の人名を「〜様」で断定しない
 
 ## 過去の相談履歴
 ${formatConsultations(consultations)}
@@ -177,11 +188,12 @@ export const GRILL_ME_FIRST_MESSAGE =
 export function buildConsultationSummaryPrompt(
   customer: Customer,
   messages: ChatMessage[],
+  currentUserName = "担当CS",
 ): string {
   const conversation = messages
     .filter((m) => m.kind !== "landing" && m.kind !== "intent")
     .map((message) => {
-      const speaker = message.role === "user" ? "担当CS" : "上司役AI";
+      const speaker = message.role === "user" ? currentUserName : "上司役AI";
       return `${speaker}: ${message.content}`;
     })
     .join("\n\n");
@@ -192,7 +204,8 @@ Pane 2 の相談履歴に表示するため、後から見返しやすい短い�
 ## 顧客情報
 - 顧客名: ${customer.name}
 - 現在フェーズ: ${phaseLabel[customer.phase]}
-- 担当者: ${customer.accountManager}
+- 社内の担当CS: ${customer.accountManager}
+- 相談者: ${currentUserName}
 
 ## 出力ルール
 - 45文字以内
@@ -214,6 +227,7 @@ export function buildLandingPrompt(
   messages: ChatMessage[],
   consultations: Consultation[] = [],
   nextActions: NextAction[] = [],
+  currentUserName = "担当CS",
 ): string {
   const recentConsultationContext =
     consultations.length > 0
@@ -226,7 +240,7 @@ export function buildLandingPrompt(
   const conversation = messages
     .filter((m) => m.kind !== "landing")
     .map((m) => {
-      const speaker = m.role === "user" ? "担当CS" : "上司役AI";
+      const speaker = m.role === "user" ? currentUserName : "上司役AI";
       return `${speaker}: ${m.content}`;
     })
     .join("\n\n");
@@ -236,7 +250,8 @@ export function buildLandingPrompt(
 ## 顧客情報
 - 顧客名: ${customer.name}
 - 現在フェーズ: ${phaseLabel[customer.phase]}
-- 担当者: ${customer.accountManager}
+- 社内の担当CS: ${customer.accountManager}
+- 相談者: ${currentUserName}
 ${recentConsultationContext}
 
 ## 既存のネクストアクションと実行結果

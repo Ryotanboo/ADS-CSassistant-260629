@@ -68,6 +68,7 @@ type CustomerListPaneProps = {
   onAddCustomer: (customer: AddCustomerInput) => void;
   onArchiveCustomer: (id: string, archived: boolean) => void;
   onDeleteCustomer: (id: string) => void;
+  defaultAccountManager?: string;
 };
 
 function sortCustomersForList(customers: Customer[]) {
@@ -86,6 +87,7 @@ export function CustomerListPane({
   onAddCustomer,
   onArchiveCustomer,
   onDeleteCustomer,
+  defaultAccountManager = "",
 }: CustomerListPaneProps) {
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -256,6 +258,7 @@ export function CustomerListPane({
         open={addOpen}
         onOpenChange={setAddOpen}
         onAdd={onAddCustomer}
+        defaultAccountManager={defaultAccountManager}
       />
 
       <AlertDialog
@@ -295,19 +298,21 @@ function CustomerAddDialog({
   open,
   onOpenChange,
   onAdd,
+  defaultAccountManager = "",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: (customer: AddCustomerInput) => void;
+  defaultAccountManager?: string;
 }) {
   const [name, setName] = useState("");
   const [phase, setPhase] = useState<CustomerPhase | "">("");
-  const [accountManager, setAccountManager] = useState("");
+  const [accountManager, setAccountManager] = useState(defaultAccountManager);
 
   const reset = () => {
     setName("");
     setPhase("");
-    setAccountManager("");
+    setAccountManager(defaultAccountManager);
   };
 
   const handleAdd = () => {
@@ -331,7 +336,11 @@ function CustomerAddDialog({
       open={open}
       onOpenChange={(nextOpen) => {
         onOpenChange(nextOpen);
-        if (!nextOpen) reset();
+        if (nextOpen) {
+          setAccountManager(defaultAccountManager);
+        } else {
+          reset();
+        }
       }}
     >
       <DialogContent className="sm:max-w-sm">
@@ -377,7 +386,7 @@ function CustomerAddDialog({
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="customer-account-manager">担当者</FieldLabel>
+            <FieldLabel htmlFor="customer-account-manager">社内の担当CS</FieldLabel>
             <Input
               id="customer-account-manager"
               value={accountManager}
@@ -385,7 +394,7 @@ function CustomerAddDialog({
               onKeyDown={(e) => {
                 if (e.key === "Enter") e.preventDefault();
               }}
-              placeholder="例: 山田 太郎"
+              placeholder="例: 川原 良太"
             />
           </Field>
         </FieldGroup>

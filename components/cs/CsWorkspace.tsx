@@ -253,13 +253,13 @@ export function CsWorkspace({
       name: input.name,
       phase: input.phase,
       contractStartDate: "—",
-      accountManager: input.accountManager,
+      accountManager: input.accountManager || workspaceState.currentUser.name,
       archived: false,
     };
     setCustomers((prev) => [...prev, newCustomer]);
     setSelectedCustomerId(newCustomer.id);
     addCustomerAction(newCustomer).catch(console.error);
-  }, []);
+  }, [workspaceState.currentUser.name]);
 
   const archiveCustomer = useCallback(
     (id: string, archived: boolean) => {
@@ -341,6 +341,7 @@ export function CsWorkspace({
             messages: textMessages,
             consultations: contextConsultations,
             nextActions: contextActions,
+            currentUserName: workspaceState.currentUser.name,
           }),
         });
 
@@ -389,7 +390,7 @@ export function CsWorkspace({
         setIsGeneratingLanding(false);
       }
     },
-    [isGeneratingLanding],
+    [isGeneratingLanding, workspaceState.currentUser.name],
   );
 
   /**
@@ -424,6 +425,7 @@ export function CsWorkspace({
             consultations: contextConsultations,
             nextActions: contextActions,
             proposalMode: inProposalMode,
+            currentUserName: workspaceState.currentUser.name,
           }),
         });
 
@@ -540,7 +542,7 @@ export function CsWorkspace({
         isFetchingRef.current = false;
       }
     },
-    [generateLanding],
+    [generateLanding, workspaceState.currentUser.name],
   );
 
   const sendMessage = useCallback(
@@ -856,6 +858,12 @@ export function CsWorkspace({
       ...prev,
       currentUser: { ...prev.currentUser, name: normalized },
     }));
+    setCustomers((prev) =>
+      prev.map((customer) => ({
+        ...customer,
+        accountManager: normalized,
+      })),
+    );
   }, []);
 
   const { defaultLayout, onLayoutChanged } = useCsPaneLayout();
@@ -891,6 +899,7 @@ export function CsWorkspace({
             onAddCustomer={addCustomer}
             onArchiveCustomer={archiveCustomer}
             onDeleteCustomer={deleteCustomer}
+            defaultAccountManager={workspaceState.currentUser.name}
           />
         </ResizablePanel>
         <ResizableHandle withHandle />

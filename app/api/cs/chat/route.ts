@@ -19,6 +19,7 @@ const requestSchema = z.object({
   consultations: z.array(consultationSchema).default([]),
   nextActions: z.array(nextActionSchema).default([]),
   proposalMode: z.boolean().default(false),
+  currentUserName: z.string().min(1).default("担当CS"),
 });
 
 export async function POST(req: NextRequest) {
@@ -61,8 +62,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { customer, messages, consultations, nextActions, proposalMode } =
-    parsed.data;
+  const {
+    customer,
+    messages,
+    consultations,
+    nextActions,
+    proposalMode,
+    currentUserName,
+  } = parsed.data;
 
   // クライアントフラグに加え、直近の提案開始境界でも検証する
   const proposalStart = findProposalSessionStartIndex(messages);
@@ -72,8 +79,18 @@ export async function POST(req: NextRequest) {
     : messages;
 
   const systemPrompt = useProposalMode
-    ? buildProposalSystemPrompt(customer, consultations, nextActions)
-    : buildSystemPrompt(customer, consultations, nextActions);
+    ? buildProposalSystemPrompt(
+        customer,
+        consultations,
+        nextActions,
+        currentUserName,
+      )
+    : buildSystemPrompt(
+        customer,
+        consultations,
+        nextActions,
+        currentUserName,
+      );
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
