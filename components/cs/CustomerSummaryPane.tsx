@@ -35,6 +35,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -250,16 +251,19 @@ function FtSummaryCard({
               <ClipboardPaste aria-hidden />
               {summary ? "更新" : "取り込む"}
             </DialogTrigger>
-            <DialogContent>
-              <form action={handleImport} className="flex flex-col gap-5">
-                <DialogHeader>
+            <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-4 overflow-hidden">
+              <form
+                action={handleImport}
+                className="flex min-h-0 flex-1 flex-col gap-4"
+              >
+                <DialogHeader className="shrink-0">
                   <DialogTitle>FT勝ち筋サマリを取り込む</DialogTitle>
                   <DialogDescription>
                     FT勝ち筋ナビの「Notion用にコピー」で取得した内容を貼り付けます。
                   </DialogDescription>
                 </DialogHeader>
-                <FieldGroup>
-                  <Field>
+                <FieldGroup className="min-h-0 flex-1 overflow-hidden">
+                  <Field className="min-h-0">
                     <FieldLabel htmlFor={`ft-summary-${customer.id}`}>
                       Notion用サマリ
                     </FieldLabel>
@@ -269,16 +273,16 @@ function FtSummaryCard({
                       name="ftSummary"
                       defaultValue={summary}
                       placeholder="FT勝ち筋ナビでコピーした内容を貼り付け"
-                      className="min-h-64"
+                      className="field-sizing-fixed max-h-[min(50vh,28rem)] min-h-40 overflow-y-auto"
                       required
                       autoFocus
                     />
                     <FieldDescription>
-                      既存の内容がある場合は、貼り付けた内容で更新されます。
+                      既存の内容がある場合は、貼り付けた内容で更新されます。長い文章は枠内でスクロールできます。
                     </FieldDescription>
                   </Field>
                 </FieldGroup>
-                <div className="flex justify-end gap-2">
+                <DialogFooter className="shrink-0">
                   <Button
                     type="button"
                     variant="outline"
@@ -289,7 +293,7 @@ function FtSummaryCard({
                   <Button type="submit" disabled={isSaving}>
                     {isSaving ? "保存中" : "取り込む"}
                   </Button>
-                </div>
+                </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
@@ -323,15 +327,15 @@ function FtSummaryCard({
             >
               全文を見る
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
+            <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-4 overflow-hidden">
+              <DialogHeader className="shrink-0">
                 <DialogTitle>FT勝ち筋サマリ</DialogTitle>
                 <DialogDescription>
                   取り込んだNotion用サマリの全文です。
                 </DialogDescription>
               </DialogHeader>
-              <ScrollArea className="max-h-[65vh]">
-                <pre className="pr-3 font-sans text-sm whitespace-pre-wrap text-foreground">
+              <ScrollArea className="min-h-0 flex-1 pr-3">
+                <pre className="font-sans text-sm whitespace-pre-wrap text-foreground">
                   {summary}
                 </pre>
               </ScrollArea>
