@@ -531,6 +531,10 @@ export function AIChatPane({
               </span>
             </Button>
           ) : null}
+
+          <p className="text-center text-xs text-muted-foreground">
+            AIの回答は必ずしも正確とは限りません。内容はご自身で確認のうえご判断ください。
+          </p>
         </div>
       </div>
     </section>
