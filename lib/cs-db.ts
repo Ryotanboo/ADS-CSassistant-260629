@@ -598,16 +598,16 @@ export async function archiveConsultationById(id: string): Promise<void> {
 // settings
 // ─────────────────────────────────────────────
 
-const SETTINGS_ID = "default";
-
 export async function getWorkspaceUser(
+  email: string,
   fallbackName: string,
 ): Promise<WorkspaceUser> {
   const sql = getDb();
+  const settingsId = email.trim().toLowerCase();
   const rows = await sql`
     SELECT user_name
     FROM cs_settings
-    WHERE id = ${SETTINGS_ID}
+    WHERE id = ${settingsId}
     LIMIT 1
   `;
   return {
@@ -618,11 +618,15 @@ export async function getWorkspaceUser(
   };
 }
 
-export async function updateWorkspaceUserName(name: string): Promise<void> {
+export async function updateWorkspaceUserName(
+  email: string,
+  name: string,
+): Promise<void> {
   const sql = getDb();
+  const settingsId = email.trim().toLowerCase();
   await sql`
     INSERT INTO cs_settings (id, user_name, updated_at)
-    VALUES (${SETTINGS_ID}, ${name}, NOW())
+    VALUES (${settingsId}, ${name}, NOW())
     ON CONFLICT (id) DO UPDATE SET
       user_name = EXCLUDED.user_name,
       updated_at = NOW()

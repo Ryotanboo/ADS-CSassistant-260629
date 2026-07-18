@@ -107,3 +107,18 @@ grill-meセッションで決定した内容の記録。
 
 - **フェーズ1（今月）**：画面の見た目のみ。データ保存・AI連携はなし
 - **フェーズ2以降**：AI連携・顧客データ保存・Notion/HubSpot連携
+
+## 認証（2026-07）
+
+チーム展開前のアクセス制御。データ分離・作成者記録は後続。
+
+| 項目 | 決定 |
+|------|------|
+| 方式 | Auth.js v5 + Google OAuth |
+| 許可 | `ALLOWED_EMAILS`（カンマ区切り）。未設定・空は全員拒否 |
+| スコープ | `/cs`・`/api/cs/*`・CS Server Actions のみ。キット `/` は公開 |
+| データ | 共有ワークスペースのまま（ユーザー分離なし） |
+| 表示名 | `cs_settings.id = ログインメール` で人ごと保存。未設定時は Google 名。顧客の担当CSとは別（一括同期しない） |
+| 認可の正本 | RSC / API / Server Actions 内の `auth()`。`proxy.ts` は UX 用リダイレクト |
+
+必要な env: `AUTH_SECRET` / `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` / `AUTH_URL` / `AUTH_TRUST_HOST` / `ALLOWED_EMAILS`（詳細は `.env.example`）

@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
 import { CsWorkspace } from "@/components/cs/CsWorkspace";
 import {
   getCustomers,
@@ -6,8 +9,8 @@ import {
   getAllConsultations,
   getWorkspaceUser,
   initTables,
-  updateAllCustomersAccountManager,
 } from "@/lib/cs-db";
+import { isEmailAllowed } from "@/lib/allowed-emails";
 import workspaceData from "@/data/cs-workspace.json";
 import consultationsData from "@/data/consultations.json";
 import { csWorkspaceSchema, consultationsSchema } from "@/lib/cs-schema";
@@ -16,6 +19,12 @@ import { csWorkspaceSchema, consultationsSchema } from "@/lib/cs-schema";
 export const dynamic = "force-dynamic";
 
 export default async function CsPage() {
+  const session = await auth();
+  const email = session?.user?.email?.trim().toLowerCase();
+  if (!email || !isEmailAllowed(email) || !session?.user) {
+    redirect("/login?reason=auth&callbackUrl=/cs");
+  }
+
   // テーブルが存在しない場合に備えて初期化
   await initTables();
 
@@ -26,30 +35,21 @@ export default async function CsPage() {
     throw new Error("設定データの形式が正しくありません");
   }
 
-  // DBからデータを取得
+  const googleName =
+    session.user.name?.trim() || wsResult.data.currentUser.name;
+
   const [customers, nextActions, chatMessages, savedConsultations, currentUser] =
     await Promise.all([
       getCustomers(),
       getAllNextActions(),
       getAllChatMessages(),
       getAllConsultations(),
-      getWorkspaceUser(wsResult.data.currentUser.name),
+      getWorkspaceUser(email, googleName),
     ]);
 
-  // 一人利用前提: 登録名と顧客の社内担当CSを揃える
-  let syncedCustomers = customers;
-  if (
-    currentUser.name &&
-    customers.some((customer) => customer.accountManager !== currentUser.name)
-  ) {
-    await updateAllCustomersAccountManager(currentUser.name);
-    syncedCustomers = await getCustomers();
-  }
-
-  // 相談履歴はデモ初期データ + DB保存された相談ログを表示する
   return (
     <CsWorkspace
-      initialCustomers={syncedCustomers}
+      initialCustomers={customers}
       initialConsultations={[
         ...consultationsResult.data,
         ...savedConsultations,

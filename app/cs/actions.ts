@@ -16,9 +16,9 @@ import {
   updateNextActionCompleted,
   updateNextActionResult,
   updateWorkspaceUserName,
-  updateAllCustomersAccountManager,
 } from "@/lib/cs-db";
 import { buildConsultationSummaryPrompt } from "@/lib/cs-ai-prompt";
+import { requireUser } from "@/lib/require-user";
 import type {
   ChatMessage,
   Consultation,
@@ -64,6 +64,7 @@ async function summarizeConsultation(
 }
 
 export async function addCustomerAction(customer: Customer) {
+  await requireUser();
   await insertCustomer(customer);
   revalidatePath("/cs");
 }
@@ -72,21 +73,25 @@ export async function archiveCustomerAction(
   customerId: string,
   archived: boolean,
 ) {
+  await requireUser();
   await updateCustomerArchived(customerId, archived);
   revalidatePath("/cs");
 }
 
 export async function deleteCustomerAction(customerId: string) {
+  await requireUser();
   await deleteCustomerById(customerId);
   revalidatePath("/cs");
 }
 
 export async function addNextActionAction(action: NextAction) {
+  await requireUser();
   await insertNextAction(action);
   revalidatePath("/cs");
 }
 
 export async function toggleNextActionAction(id: string, completed: boolean) {
+  await requireUser();
   const completedAt = completed ? new Date().toISOString() : undefined;
   await updateNextActionCompleted(id, completed, completedAt);
   revalidatePath("/cs");
@@ -97,6 +102,7 @@ export async function updateNextActionResultAction(
   id: string,
   resultNote: string,
 ) {
+  await requireUser();
   const normalized = resultNote.trim().slice(0, 1000);
   await updateNextActionResult(id, normalized);
   revalidatePath("/cs");
@@ -106,6 +112,7 @@ export async function updateCustomerFtSummaryAction(
   customerId: string,
   ftSummary: string,
 ) {
+  await requireUser();
   const normalized = ftSummary.trim();
   if (normalized.length > 50000) {
     throw new Error("FT勝ち筋サマリは50,000文字以内で入力してください");
@@ -117,23 +124,24 @@ export async function updateCustomerFtSummaryAction(
 }
 
 export async function updateWorkspaceUserNameAction(name: string) {
+  const user = await requireUser();
   const normalized = name.trim();
   if (!normalized) {
     throw new Error("名前を入力してください");
   }
   const sliced = normalized.slice(0, 80);
-  // 一人利用前提: 登録名と顧客の社内担当CSを揃える
-  await updateWorkspaceUserName(sliced);
-  await updateAllCustomersAccountManager(sliced);
+  await updateWorkspaceUserName(user.email, sliced);
   revalidatePath("/cs");
 }
 
 export async function deleteNextActionAction(id: string) {
+  await requireUser();
   await deleteNextActionById(id);
   revalidatePath("/cs");
 }
 
 export async function addChatMessageAction(message: ChatMessage) {
+  await requireUser();
   await insertChatMessage(message);
   revalidatePath("/cs");
 }
@@ -142,6 +150,7 @@ export async function archiveChatSessionAction(
   customer: Customer,
   messages: ChatMessage[],
 ): Promise<Consultation> {
+  await requireUser();
   if (messages.length === 0) {
     throw new Error("履歴化するチャットがありません");
   }
@@ -164,6 +173,7 @@ export async function archiveChatSessionAction(
 }
 
 export async function discardChatSessionAction(messages: ChatMessage[]) {
+  await requireUser();
   if (messages.length === 0) return;
 
   await deleteChatMessagesByIds(messages.map((message) => message.id));
@@ -171,6 +181,7 @@ export async function discardChatSessionAction(messages: ChatMessage[]) {
 }
 
 export async function archiveConsultationAction(id: string) {
+  await requireUser();
   await archiveConsultationById(id);
   revalidatePath("/cs");
 }

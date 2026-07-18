@@ -9,6 +9,7 @@ import {
   landingCardSchema,
   nextActionSchema,
 } from "@/lib/cs-schema";
+import { requireUser } from "@/lib/require-user";
 
 const requestSchema = z.object({
   customer: customerSchema,
@@ -19,6 +20,12 @@ const requestSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  try {
+    await requireUser();
+  } catch {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return Response.json(

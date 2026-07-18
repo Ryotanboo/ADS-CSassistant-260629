@@ -63,6 +63,7 @@ import {
   updateNextActionResultAction,
   updateWorkspaceUserNameAction,
 } from "@/app/cs/actions";
+import { signOutAction } from "@/app/cs/auth-actions";
 
 type CsWorkspaceProps = {
   initialCustomers: Customer[];
@@ -858,12 +859,6 @@ export function CsWorkspace({
       ...prev,
       currentUser: { ...prev.currentUser, name: normalized },
     }));
-    setCustomers((prev) =>
-      prev.map((customer) => ({
-        ...customer,
-        accountManager: normalized,
-      })),
-    );
   }, []);
 
   const { defaultLayout, onLayoutChanged } = useCsPaneLayout();
@@ -878,7 +873,11 @@ export function CsWorkspace({
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground">
-      <CsGlobalHeader workspace={workspaceState} onSaveUserName={updateUserName} />
+      <CsGlobalHeader
+        workspace={workspaceState}
+        onSaveUserName={updateUserName}
+        onSignOut={signOutAction}
+      />
       <ResizablePanelGroup
         id={CS_PANE_LAYOUT_STORAGE_ID}
         orientation="horizontal"

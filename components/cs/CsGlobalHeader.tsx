@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, Settings, Sparkles } from "lucide-react";
+import { Bell, LogOut, Settings, Sparkles } from "lucide-react";
 
 import { type CsWorkspace } from "@/lib/cs-schema";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -21,14 +21,17 @@ import { Input } from "@/components/ui/input";
 type CsGlobalHeaderProps = {
   workspace: CsWorkspace;
   onSaveUserName: (name: string) => Promise<void>;
+  onSignOut: () => Promise<void>;
 };
 
 export function CsGlobalHeader({
   workspace,
   onSaveUserName,
+  onSignOut,
 }: CsGlobalHeaderProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const userInitial = workspace.currentUser.name[0] ?? "?";
 
   const handleSubmit = async (formData: FormData) => {
@@ -40,6 +43,15 @@ export function CsGlobalHeader({
       setSettingsOpen(false);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await onSignOut();
+    } finally {
+      setIsSigningOut(false);
     }
   };
 
@@ -79,7 +91,7 @@ export function CsGlobalHeader({
               <DialogHeader>
                 <DialogTitle>ユーザー設定</DialogTitle>
                 <DialogDescription>
-                  CSアシスタントに表示する名前を設定します。
+                  チャットや相談で使うあなたの表示名です。顧客の「社内の担当CS」とは別です。
                 </DialogDescription>
               </DialogHeader>
               <FieldGroup>
@@ -109,6 +121,18 @@ export function CsGlobalHeader({
                 </Button>
               </DialogFooter>
             </form>
+            <div className="border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={isSigningOut}
+                onClick={handleSignOut}
+              >
+                <LogOut aria-hidden />
+                {isSigningOut ? "ログアウト中" : "ログアウト"}
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
