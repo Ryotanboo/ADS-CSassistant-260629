@@ -13,16 +13,20 @@ import {
   insertNextAction,
   updateCustomerArchived,
   updateCustomerFtSummary,
+  updateCustomerProfile,
   updateNextActionCompleted,
   updateNextActionResult,
   updateWorkspaceUserName,
+  type CustomerProfilePatch,
 } from "@/lib/cs-db";
 import { buildConsultationSummaryPrompt } from "@/lib/cs-ai-prompt";
+import { CUSTOMER_PHASE_ORDER } from "@/lib/cs-labels";
 import { requireUser } from "@/lib/require-user";
 import type {
   ChatMessage,
   Consultation,
   Customer,
+  CustomerPhase,
   NextAction,
 } from "@/lib/cs-schema";
 
@@ -81,6 +85,42 @@ export async function archiveCustomerAction(
 export async function deleteCustomerAction(customerId: string) {
   await requireUser();
   await deleteCustomerById(customerId);
+  revalidatePath("/cs");
+}
+
+export async function updateCustomerAction(
+  customerId: string,
+  patch: CustomerProfilePatch,
+) {
+  await requireUser();
+  const next: CustomerProfilePatch = {};
+
+  if (patch.name !== undefined) {
+    const name = patch.name.trim().slice(0, 120);
+    if (!name) throw new Error("会社名を入力してください");
+    next.name = name;
+  }
+  if (patch.phase !== undefined) {
+    if (!CUSTOMER_PHASE_ORDER.includes(patch.phase as CustomerPhase)) {
+      throw new Error("不正なフェーズです");
+    }
+    next.phase = patch.phase;
+  }
+  if (patch.contractStartDate !== undefined) {
+    const date = patch.contractStartDate.trim();
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new Error("契約開始日の形式が正しくありません");
+    }
+    next.contractStartDate = date || "—";
+  }
+  if (patch.accountManager !== undefined) {
+    const accountManager = patch.accountManager.trim().slice(0, 80);
+    if (!accountManager) throw new Error("社内の担当CSを入力してください");
+    next.accountManager = accountManager;
+  }
+
+  if (Object.keys(next).length === 0) return;
+  await updateCustomerProfile(customerId, next);
   revalidatePath("/cs");
 }
 

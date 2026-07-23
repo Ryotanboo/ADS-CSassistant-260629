@@ -51,6 +51,7 @@ import {
 import {
   addCustomerAction,
   addNextActionAction,
+  updateCustomerAction,
   archiveCustomerAction,
   deleteCustomerAction,
   toggleNextActionAction,
@@ -64,6 +65,7 @@ import {
   updateWorkspaceUserNameAction,
 } from "@/app/cs/actions";
 import { signOutAction } from "@/app/cs/auth-actions";
+import type { CustomerProfilePatch } from "@/lib/cs-db";
 
 type CsWorkspaceProps = {
   initialCustomers: Customer[];
@@ -851,6 +853,37 @@ export function CsWorkspace({
     [activeCustomer],
   );
 
+  const updateCustomer = useCallback(
+    async (patch: CustomerProfilePatch) => {
+      if (!activeCustomer) return;
+      const customerId = activeCustomer.id;
+      const normalizedPatch: CustomerProfilePatch = {
+        ...patch,
+        ...(patch.contractStartDate !== undefined
+          ? { contractStartDate: patch.contractStartDate || "—" }
+          : {}),
+      };
+      setCustomers((prev) =>
+        prev.map((customer) =>
+          customer.id === customerId
+            ? { ...customer, ...normalizedPatch }
+            : customer,
+        ),
+      );
+      try {
+        await updateCustomerAction(customerId, normalizedPatch);
+      } catch (error) {
+        console.error(error);
+        setCustomers((prev) =>
+          prev.map((customer) =>
+            customer.id === customerId ? activeCustomer : customer,
+          ),
+        );
+      }
+    },
+    [activeCustomer],
+  );
+
   const updateUserName = useCallback(async (name: string) => {
     const normalized = name.trim();
     if (!normalized) return;
@@ -912,6 +945,7 @@ export function CsWorkspace({
             customer={activeCustomer}
             consultations={customerConsultations}
             onArchiveConsultation={archiveConsultation}
+            onUpdateCustomer={updateCustomer}
             onUpdateFtSummary={updateFtSummary}
           />
         </ResizablePanel>

@@ -3,24 +3,27 @@
 import { useState } from "react";
 import {
   Archive,
-  Calendar,
   ClipboardPaste,
   Clock,
   Database,
   ExternalLink,
   MessageSquareText,
   MoreHorizontal,
-  User,
-  type LucideIcon,
 } from "lucide-react";
 
-import { type Consultation, type Customer } from "@/lib/cs-schema";
+import {
+  type Consultation,
+  type Customer,
+  type CustomerPhase,
+} from "@/lib/cs-schema";
 import { CONVERSATION_INTENT_LABELS } from "@/lib/cs-conversation-intents";
 import {
   CONSULTATION_TYPE_LABELS,
   CUSTOMER_PHASE_LABELS,
+  CUSTOMER_PHASE_ORDER,
 } from "@/lib/cs-labels";
-import { consultationBadgeVariant, phaseBadgeVariant } from "@/lib/cs-badges";
+import { consultationBadgeVariant } from "@/lib/cs-badges";
+import type { CustomerProfilePatch } from "@/lib/cs-db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,7 +51,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Field,
@@ -56,11 +58,32 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
+import {
+  InlineDateField,
+  InlineFieldRow,
+  InlineSelectField,
+  InlineTextField,
+} from "@/components/primitives";
+
+const PHASE_LABEL_OPTIONS = CUSTOMER_PHASE_ORDER.map(
+  (phase) => CUSTOMER_PHASE_LABELS[phase],
+);
+
+function phaseFromLabel(label: string): CustomerPhase | undefined {
+  return CUSTOMER_PHASE_ORDER.find(
+    (phase) => CUSTOMER_PHASE_LABELS[phase] === label,
+  );
+}
+
+function toEditableContractDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+}
 
 type CustomerSummaryPaneProps = {
   customer: Customer;
   consultations: Consultation[];
   onArchiveConsultation: (id: string) => void;
+  onUpdateCustomer: (patch: CustomerProfilePatch) => Promise<void>;
   onUpdateFtSummary: (ftSummary: string) => Promise<void>;
 };
 
@@ -68,6 +91,7 @@ export function CustomerSummaryPane({
   customer,
   consultations,
   onArchiveConsultation,
+  onUpdateCustomer,
   onUpdateFtSummary,
 }: CustomerSummaryPaneProps) {
   return (
@@ -80,33 +104,62 @@ export function CustomerSummaryPane({
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-5 p-4">
-          <div className="flex flex-col gap-2">
-            <h3 className="text-base font-semibold text-foreground">
-              {customer.name}
-            </h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                現在のフェーズ
-              </span>
-              <Badge variant={phaseBadgeVariant(customer.phase)} size="xs">
-                {CUSTOMER_PHASE_LABELS[customer.phase]}
-              </Badge>
-            </div>
-          </div>
-
-          <Card size="sm" className="py-0">
-            <CardContent className="flex flex-col gap-3 py-3">
-              <SummaryRow
-                icon={Calendar}
-                label="契約開始日"
-                value={customer.contractStartDate}
-              />
-              <Separator />
-              <SummaryRow
-                icon={User}
-                label="社内の担当CS"
-                value={customer.accountManager}
-              />
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>基本情報</CardTitle>
+              <CardDescription>
+                クリックしてそのまま編集できます。確定はフォーカスを外すか Enter です。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <dl className="flex flex-col gap-2.5 text-sm">
+                <InlineFieldRow label="会社名">
+                  <InlineTextField
+                    key={`${customer.id}-name`}
+                    value={customer.name}
+                    onSave={(name) => {
+                      void onUpdateCustomer({ name });
+                    }}
+                    ariaLabel="会社名"
+                    placeholder="会社名"
+                  />
+                </InlineFieldRow>
+                <InlineFieldRow label="フェーズ">
+                  <InlineSelectField
+                    key={`${customer.id}-phase`}
+                    value={CUSTOMER_PHASE_LABELS[customer.phase]}
+                    options={PHASE_LABEL_OPTIONS}
+                    onSave={(label) => {
+                      const phase = phaseFromLabel(label);
+                      if (!phase || phase === customer.phase) return;
+                      void onUpdateCustomer({ phase });
+                    }}
+                    ariaLabel="フェーズ"
+                    placeholder="フェーズを選択"
+                  />
+                </InlineFieldRow>
+                <InlineFieldRow label="契約開始日">
+                  <InlineDateField
+                    key={`${customer.id}-contract`}
+                    value={toEditableContractDate(customer.contractStartDate)}
+                    onSave={(contractStartDate) => {
+                      void onUpdateCustomer({ contractStartDate });
+                    }}
+                    ariaLabel="契約開始日"
+                  />
+                </InlineFieldRow>
+                <InlineFieldRow label="社内の担当CS">
+                  <InlineTextField
+                    key={`${customer.id}-manager`}
+                    value={customer.accountManager}
+                    onSave={(accountManager) => {
+                      void onUpdateCustomer({ accountManager });
+                    }}
+                    ariaLabel="社内の担当CS"
+                    placeholder="担当CS名"
+                  />
+                </InlineFieldRow>
+              </dl>
             </CardContent>
           </Card>
 
@@ -440,25 +493,3 @@ function ConsultationTranscriptDialog({
   );
 }
 
-function SummaryRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <Icon
-        aria-hidden
-        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-      />
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="text-sm text-foreground">{value}</span>
-      </div>
-    </div>
-  );
-}

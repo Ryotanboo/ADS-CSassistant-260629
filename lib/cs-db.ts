@@ -194,6 +194,48 @@ export async function updateCustomerArchived(
   `;
 }
 
+export type CustomerProfilePatch = {
+  name?: string;
+  phase?: Customer["phase"];
+  contractStartDate?: string;
+  accountManager?: string;
+};
+
+export async function updateCustomerProfile(
+  customerId: string,
+  patch: CustomerProfilePatch,
+): Promise<void> {
+  const sql = getDb();
+  if (patch.name !== undefined) {
+    await sql`
+      UPDATE customers
+      SET name = ${patch.name}
+      WHERE id = ${customerId}
+    `;
+  }
+  if (patch.phase !== undefined) {
+    await sql`
+      UPDATE customers
+      SET phase = ${patch.phase}
+      WHERE id = ${customerId}
+    `;
+  }
+  if (patch.contractStartDate !== undefined) {
+    await sql`
+      UPDATE customers
+      SET contract_start_date = ${patch.contractStartDate}
+      WHERE id = ${customerId}
+    `;
+  }
+  if (patch.accountManager !== undefined) {
+    await sql`
+      UPDATE customers
+      SET account_manager = ${patch.accountManager}
+      WHERE id = ${customerId}
+    `;
+  }
+}
+
 export async function deleteCustomerById(customerId: string): Promise<void> {
   const sql = getDb();
   await sql`DELETE FROM customers WHERE id = ${customerId}`;
