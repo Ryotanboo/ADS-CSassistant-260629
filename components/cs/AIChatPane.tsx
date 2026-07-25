@@ -6,6 +6,7 @@ import {
   Bot,
   Check,
   CheckCheck,
+  ChevronRight,
   Copy,
   FilePenLine,
   Lightbulb,
@@ -512,8 +513,8 @@ export function AIChatPane({
           {!proposalMode ? (
             <Button
               type="button"
-              variant="secondary"
-              className="h-auto justify-start gap-3 px-3 py-2.5"
+              variant="accent"
+              className="h-auto w-full justify-start gap-3 px-3 py-2.5"
               onClick={() => {
                 onStartGrillMe();
                 requestAnimationFrame(() => {
@@ -523,12 +524,13 @@ export function AIChatPane({
               disabled={isLoading}
             >
               <Lightbulb aria-hidden />
-              <span className="flex flex-col items-start gap-0.5">
+              <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
                 <span>何から話せばいいか分からない</span>
-                <span className="text-xs font-normal text-muted-foreground">
+                <span className="text-xs font-normal opacity-80">
                   AIが最初の問いかけをしてくれます
                 </span>
               </span>
+              <ChevronRight aria-hidden className="opacity-80" />
             </Button>
           ) : null}
 
