@@ -3,12 +3,15 @@
 import { useState } from "react";
 import {
   Archive,
+  Calendar,
   ClipboardPaste,
   Clock,
   Database,
   ExternalLink,
   MessageSquareText,
   MoreHorizontal,
+  User,
+  type LucideIcon,
 } from "lucide-react";
 
 import {
@@ -22,7 +25,10 @@ import {
   CUSTOMER_PHASE_LABELS,
   CUSTOMER_PHASE_ORDER,
 } from "@/lib/cs-labels";
-import { consultationBadgeVariant } from "@/lib/cs-badges";
+import {
+  consultationBadgeVariant,
+  phaseBadgeVariant,
+} from "@/lib/cs-badges";
 import type { CustomerProfilePatch } from "@/lib/cs-db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +57,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Field,
@@ -104,64 +111,11 @@ export function CustomerSummaryPane({
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-5 p-4">
-          <Card size="sm">
-            <CardHeader>
-              <CardTitle>基本情報</CardTitle>
-              <CardDescription>
-                クリックしてそのまま編集できます。確定はフォーカスを外すか Enter です。
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <dl className="flex flex-col gap-2.5 text-sm">
-                <InlineFieldRow label="会社名">
-                  <InlineTextField
-                    key={`${customer.id}-name`}
-                    value={customer.name}
-                    onSave={(name) => {
-                      void onUpdateCustomer({ name });
-                    }}
-                    ariaLabel="会社名"
-                    placeholder="会社名"
-                  />
-                </InlineFieldRow>
-                <InlineFieldRow label="フェーズ">
-                  <InlineSelectField
-                    key={`${customer.id}-phase`}
-                    value={CUSTOMER_PHASE_LABELS[customer.phase]}
-                    options={PHASE_LABEL_OPTIONS}
-                    onSave={(label) => {
-                      const phase = phaseFromLabel(label);
-                      if (!phase || phase === customer.phase) return;
-                      void onUpdateCustomer({ phase });
-                    }}
-                    ariaLabel="フェーズ"
-                    placeholder="フェーズを選択"
-                  />
-                </InlineFieldRow>
-                <InlineFieldRow label="契約開始日">
-                  <InlineDateField
-                    key={`${customer.id}-contract`}
-                    value={toEditableContractDate(customer.contractStartDate)}
-                    onSave={(contractStartDate) => {
-                      void onUpdateCustomer({ contractStartDate });
-                    }}
-                    ariaLabel="契約開始日"
-                  />
-                </InlineFieldRow>
-                <InlineFieldRow label="社内の担当CS">
-                  <InlineTextField
-                    key={`${customer.id}-manager`}
-                    value={customer.accountManager}
-                    onSave={(accountManager) => {
-                      void onUpdateCustomer({ accountManager });
-                    }}
-                    ariaLabel="社内の担当CS"
-                    placeholder="担当CS名"
-                  />
-                </InlineFieldRow>
-              </dl>
-            </CardContent>
-          </Card>
+          <BasicInfoSection
+            key={customer.id}
+            customer={customer}
+            onUpdateCustomer={onUpdateCustomer}
+          />
 
           <FtSummaryCard
             customer={customer}
@@ -228,6 +182,159 @@ export function CustomerSummaryPane({
         </Button>
       </footer>
     </section>
+  );
+}
+
+function BasicInfoSection({
+  customer,
+  onUpdateCustomer,
+}: {
+  customer: Customer;
+  onUpdateCustomer: (patch: CustomerProfilePatch) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>基本情報</CardTitle>
+          <CardDescription>
+            クリックしてそのまま編集できます。確定はフォーカスを外すか Enter です。
+          </CardDescription>
+          <CardAction>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditing(false)}
+            >
+              完了
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <dl className="flex flex-col gap-2.5 text-sm">
+            <InlineFieldRow label="会社名">
+              <InlineTextField
+                key={`${customer.id}-name`}
+                value={customer.name}
+                onSave={(name) => {
+                  void onUpdateCustomer({ name });
+                }}
+                ariaLabel="会社名"
+                placeholder="会社名"
+              />
+            </InlineFieldRow>
+            <InlineFieldRow label="フェーズ">
+              <InlineSelectField
+                key={`${customer.id}-phase`}
+                value={CUSTOMER_PHASE_LABELS[customer.phase]}
+                options={PHASE_LABEL_OPTIONS}
+                onSave={(label) => {
+                  const phase = phaseFromLabel(label);
+                  if (!phase || phase === customer.phase) return;
+                  void onUpdateCustomer({ phase });
+                }}
+                ariaLabel="フェーズ"
+                placeholder="フェーズを選択"
+              />
+            </InlineFieldRow>
+            <InlineFieldRow label="契約開始日">
+              <InlineDateField
+                key={`${customer.id}-contract`}
+                value={toEditableContractDate(customer.contractStartDate)}
+                onSave={(contractStartDate) => {
+                  void onUpdateCustomer({ contractStartDate });
+                }}
+                ariaLabel="契約開始日"
+              />
+            </InlineFieldRow>
+            <InlineFieldRow label="社内の担当CS">
+              <InlineTextField
+                key={`${customer.id}-manager`}
+                value={customer.accountManager}
+                onSave={(accountManager) => {
+                  void onUpdateCustomer({ accountManager });
+                }}
+                ariaLabel="社内の担当CS"
+                placeholder="担当CS名"
+              />
+            </InlineFieldRow>
+          </dl>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-2">
+          <h3 className="truncate text-base font-semibold text-foreground">
+            {customer.name}
+          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">現在のフェーズ</span>
+            <Badge variant={phaseBadgeVariant(customer.phase)} size="xs">
+              {CUSTOMER_PHASE_LABELS[customer.phase]}
+            </Badge>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={() => setEditing(true)}
+        >
+          編集
+        </Button>
+      </div>
+
+      <Card size="sm" className="py-0">
+        <CardContent className="flex flex-col gap-3 py-3">
+          <SummaryRow
+            icon={Calendar}
+            label="契約開始日"
+            value={
+              toEditableContractDate(customer.contractStartDate) ||
+              customer.contractStartDate ||
+              "未設定"
+            }
+          />
+          <Separator />
+          <SummaryRow
+            icon={User}
+            label="社内の担当CS"
+            value={customer.accountManager || "未設定"}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function SummaryRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <Icon
+        aria-hidden
+        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+      />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-sm text-foreground">{value}</span>
+      </div>
+    </div>
   );
 }
 
