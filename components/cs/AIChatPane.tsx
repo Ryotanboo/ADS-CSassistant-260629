@@ -754,7 +754,7 @@ function LandingCardBubble({
               ) : (
                 <>
                   <ListChecks aria-hidden className="size-3.5" />
-                  すべてPane 4へ
+                  すべてネクストアクションへ
                 </>
               )}
             </Button>
