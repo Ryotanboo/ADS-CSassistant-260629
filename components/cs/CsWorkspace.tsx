@@ -28,6 +28,7 @@ import {
   type ProposalQuestionCard,
 } from "@/lib/cs-schema";
 import { GRILL_ME_FIRST_MESSAGE } from "@/lib/cs-ai-prompt";
+import { pickDefaultCustomerId } from "@/lib/cs-customers";
 import { CONVERSATION_INTENT_PROMPTS } from "@/lib/cs-conversation-intents";
 import { isProposalModeActive } from "@/lib/cs-proposal-prompt";
 import { CsGlobalHeader } from "@/components/cs/CsGlobalHeader";
@@ -175,8 +176,8 @@ export function CsWorkspace({
     useState<NextAction[]>(initialNextActions);
   const [workspaceState, setWorkspaceState] =
     useState<CsWorkspaceType>(workspace);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
-    initialCustomers[0]?.id ?? "",
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() =>
+    pickDefaultCustomerId(initialCustomers),
   );
 
   // AIチャット用の状態
@@ -192,9 +193,10 @@ export function CsWorkspace({
   const hasAutoLandedRef = useRef<Set<string>>(new Set());
 
   const activeCustomer =
-    customers.find((c) => c.id === selectedCustomerId && !c.archived) ??
-    customers.find((c) => c.id === selectedCustomerId) ??
-    customers.find((c) => !c.archived) ??
+    customers.find((customer) => customer.id === selectedCustomerId) ??
+    customers.find(
+      (customer) => customer.id === pickDefaultCustomerId(customers),
+    ) ??
     customers[0];
 
   const customerConsultations = useMemo(
@@ -271,11 +273,7 @@ export function CsWorkspace({
           customer.id === id ? { ...customer, archived } : customer,
         );
         if (archived && selectedCustomerId === id) {
-          const nextActive =
-            next.find((customer) => !customer.archived)?.id ??
-            next[0]?.id ??
-            "";
-          setSelectedCustomerId(nextActive);
+          setSelectedCustomerId(pickDefaultCustomerId(next));
         }
         return next;
       });
@@ -289,11 +287,7 @@ export function CsWorkspace({
       setCustomers((prev) => {
         const next = prev.filter((customer) => customer.id !== id);
         if (selectedCustomerId === id) {
-          const nextActive =
-            next.find((customer) => !customer.archived)?.id ??
-            next[0]?.id ??
-            "";
-          setSelectedCustomerId(nextActive);
+          setSelectedCustomerId(pickDefaultCustomerId(next));
         }
         return next;
       });

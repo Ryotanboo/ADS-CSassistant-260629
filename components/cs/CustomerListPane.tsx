@@ -6,9 +6,9 @@ import { Archive, Building2, MoreHorizontal, Plus, Search, Trash2 } from "lucide
 import { type Customer, type CustomerPhase } from "@/lib/cs-schema";
 import {
   CUSTOMER_PHASE_LABELS,
-  CUSTOMER_PHASE_LIST_RANK,
   CUSTOMER_PHASE_ORDER,
 } from "@/lib/cs-labels";
+import { sortCustomersForList } from "@/lib/cs-customers";
 import { phaseBadgeVariant } from "@/lib/cs-badges";
 import { cn } from "@/lib/utils";
 import {
@@ -70,15 +70,6 @@ type CustomerListPaneProps = {
   onDeleteCustomer: (id: string) => void;
   defaultAccountManager?: string;
 };
-
-function sortCustomersForList(customers: Customer[]) {
-  return [...customers].sort((a, b) => {
-    const phaseDiff =
-      CUSTOMER_PHASE_LIST_RANK[a.phase] - CUSTOMER_PHASE_LIST_RANK[b.phase];
-    if (phaseDiff !== 0) return phaseDiff;
-    return a.name.localeCompare(b.name, "ja");
-  });
-}
 
 export function CustomerListPane({
   customers,
