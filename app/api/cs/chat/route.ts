@@ -3,9 +3,12 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { buildSystemPrompt } from "@/lib/cs-ai-prompt";
 import {
-  buildProposalSystemPrompt,
+  findPresentationSessionStartIndex,
   findProposalSessionStartIndex,
-} from "@/lib/cs-proposal-prompt";
+  type ChatMode,
+} from "@/lib/cs-chat-mode";
+import { buildProposalSystemPrompt } from "@/lib/cs-proposal-prompt";
+import { buildPresentationSystemPrompt } from "@/lib/cs-presentation-prompt";
 import {
   customerSchema,
   chatMessageSchema,
@@ -19,9 +22,51 @@ const requestSchema = z.object({
   messages: z.array(chatMessageSchema),
   consultations: z.array(consultationSchema).default([]),
   nextActions: z.array(nextActionSchema).default([]),
-  proposalMode: z.boolean().default(false),
+  chatMode: z.enum(["normal", "proposal", "presentation"]).default("normal"),
   currentUserName: z.string().min(1).default("担当CS"),
 });
+
+function resolveChatMode(
+  requested: ChatMode,
+  messages: z.infer<typeof chatMessageSchema>[],
+): {
+  mode: ChatMode;
+  sessionMessages: z.infer<typeof chatMessageSchema>[];
+  latestProposalDocument: string | null;
+} {
+  const proposalStart = findProposalSessionStartIndex(messages);
+  const presentationStart = findPresentationSessionStartIndex(messages);
+
+  let latestProposalDocument: string | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].kind === "proposal_document") {
+      latestProposalDocument = messages[i].content;
+      break;
+    }
+  }
+
+  if (requested === "presentation" && presentationStart >= 0) {
+    return {
+      mode: "presentation",
+      sessionMessages: messages.slice(presentationStart),
+      latestProposalDocument,
+    };
+  }
+
+  if (requested === "proposal" && proposalStart >= 0) {
+    return {
+      mode: "proposal",
+      sessionMessages: messages.slice(proposalStart),
+      latestProposalDocument,
+    };
+  }
+
+  return {
+    mode: "normal",
+    sessionMessages: messages,
+    latestProposalDocument,
+  };
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -77,30 +122,34 @@ export async function POST(req: NextRequest) {
     messages,
     consultations,
     nextActions,
-    proposalMode,
+    chatMode,
     currentUserName,
   } = parsed.data;
 
-  // クライアントフラグに加え、直近の提案開始境界でも検証する
-  const proposalStart = findProposalSessionStartIndex(messages);
-  const useProposalMode = proposalMode && proposalStart >= 0;
-  const sessionMessages = useProposalMode
-    ? messages.slice(proposalStart)
-    : messages;
+  const resolved = resolveChatMode(chatMode, messages);
 
-  const systemPrompt = useProposalMode
-    ? buildProposalSystemPrompt(
-        customer,
-        consultations,
-        nextActions,
-        currentUserName,
-      )
-    : buildSystemPrompt(
-        customer,
-        consultations,
-        nextActions,
-        currentUserName,
-      );
+  const systemPrompt =
+    resolved.mode === "presentation"
+      ? buildPresentationSystemPrompt(
+          customer,
+          consultations,
+          nextActions,
+          currentUserName,
+          resolved.latestProposalDocument,
+        )
+      : resolved.mode === "proposal"
+        ? buildProposalSystemPrompt(
+            customer,
+            consultations,
+            nextActions,
+            currentUserName,
+          )
+        : buildSystemPrompt(
+            customer,
+            consultations,
+            nextActions,
+            currentUserName,
+          );
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
@@ -109,8 +158,9 @@ export async function POST(req: NextRequest) {
   });
 
   // Gemini の history 形式へ変換（最後のユーザーメッセージは history に含めない）
-  const historyMessages = sessionMessages.slice(0, -1);
-  const lastMessage = sessionMessages[sessionMessages.length - 1];
+  const historyMessages = resolved.sessionMessages.slice(0, -1);
+  const lastMessage =
+    resolved.sessionMessages[resolved.sessionMessages.length - 1];
 
   if (!lastMessage || lastMessage.role !== "user") {
     return new Response(

@@ -12,6 +12,7 @@ import {
   Lightbulb,
   ListChecks,
   Loader2,
+  Mic,
   Send,
   Sparkles,
   Waypoints,
@@ -23,10 +24,12 @@ import {
   type ConversationIntent,
   type LandingCard,
   type NextAction,
+  type PresentationQuestionCard,
   type ProposalAudience,
   type ProposalQuestionCard,
 } from "@/lib/cs-schema";
 import { CONVERSATION_INTENT_LABELS } from "@/lib/cs-conversation-intents";
+import { getExitCtaState } from "@/lib/cs-exit-cta";
 import { NEXT_ACTION_PRIORITY_LABELS } from "@/lib/cs-labels";
 import { priorityBadgeVariant } from "@/lib/cs-badges";
 import { cn } from "@/lib/utils";
@@ -53,6 +56,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
+type ArtifactPinTab = "proposal" | "script";
+
 type AIChatPaneProps = {
   messages: ChatMessage[];
   onSendMessage: (content: string) => void;
@@ -63,11 +68,15 @@ type AIChatPaneProps = {
   onRequestIntent: (intent: ConversationIntent) => void;
   onStartProposalMode: () => void;
   onExitProposalMode: () => void;
+  onStartPresentationMode: () => void;
+  onExitPresentationMode: () => void;
   onAddActionFromLanding: (label: string, priority: NextAction["priority"]) => void;
   proposalMode?: boolean;
+  presentationMode?: boolean;
   proposalAudience?: ProposalAudience | null;
   hasPendingActions?: boolean;
   latestProposalDocument?: ChatMessage | null;
+  latestPresentationScript?: ChatMessage | null;
   isLoading?: boolean;
   isArchiving?: boolean;
   isGeneratingLanding?: boolean;
@@ -85,11 +94,15 @@ export function AIChatPane({
   onRequestIntent,
   onStartProposalMode,
   onExitProposalMode,
+  onStartPresentationMode,
+  onExitPresentationMode,
   onAddActionFromLanding,
   proposalMode = false,
+  presentationMode = false,
   proposalAudience = null,
   hasPendingActions = false,
   latestProposalDocument = null,
+  latestPresentationScript = null,
   isLoading = false,
   isArchiving = false,
   isGeneratingLanding = false,
@@ -103,6 +116,7 @@ export function AIChatPane({
   const [addedLabels, setAddedLabels] = useState<Set<string>>(new Set());
   const scrollBottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const facilitatorMode = proposalMode || presentationMode;
 
   // 新しいメッセージ追加・ストリーミング更新時に最下部へスクロール
   useEffect(() => {
@@ -154,7 +168,7 @@ export function AIChatPane({
     setArchiveDialogOpen(false);
   };
 
-  const handleCopyProposal = async (content: string) => {
+  const handleCopyArtifact = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
       setCopied(true);
@@ -166,16 +180,36 @@ export function AIChatPane({
 
   const isBusy = isLoading || isGeneratingLanding || isArchiving;
   const hasMessages = messages.length > 0;
+  const exitCta = getExitCtaState({
+    chatMode: presentationMode
+      ? "presentation"
+      : proposalMode
+        ? "proposal"
+        : "normal",
+    hasPendingActions,
+    hasProposalDocument: latestProposalDocument != null,
+  });
+  const canStartPresentation = exitCta.showPresentation;
+
+  const defaultPinTab = ((): ArtifactPinTab => {
+    if (!latestProposalDocument && latestPresentationScript) return "script";
+    if (!latestPresentationScript) return "proposal";
+    if (!latestProposalDocument) return "script";
+    const proposalIndex = messages.findIndex(
+      (m) => m.id === latestProposalDocument.id,
+    );
+    const scriptIndex = messages.findIndex(
+      (m) => m.id === latestPresentationScript.id,
+    );
+    return scriptIndex >= proposalIndex ? "script" : "proposal";
+  })();
 
   const latestProposalQuestion = (() => {
     if (!proposalMode || isBusy) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
       const message = messages[i];
       if (message.kind === "proposal_question" && message.proposalCard) {
-        // この質問のあとにユーザー返答があれば選択済み
-        const answered = messages
-          .slice(i + 1)
-          .some((m) => m.role === "user");
+        const answered = messages.slice(i + 1).some((m) => m.role === "user");
         if (!answered) return message;
         return null;
       }
@@ -184,17 +218,41 @@ export function AIChatPane({
     return null;
   })();
 
+  const latestPresentationQuestion = (() => {
+    if (!presentationMode || isBusy) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (
+        message.kind === "presentation_question" &&
+        message.presentationCard
+      ) {
+        const answered = messages.slice(i + 1).some((m) => m.role === "user");
+        if (!answered) return message;
+        return null;
+      }
+      if (message.kind === "presentation_script") return null;
+    }
+    return null;
+  })();
+
+  const showArtifactPin =
+    latestProposalDocument != null || latestPresentationScript != null;
+
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-canvas">
       <header
         className={cn(
           "flex h-12 shrink-0 items-center gap-2 border-b px-4",
-          proposalMode
-            ? "border-opportunity/30 bg-opportunity/10"
-            : "border-border bg-background",
+          presentationMode
+            ? "border-accent/40 bg-accent/20"
+            : proposalMode
+              ? "border-opportunity/30 bg-opportunity/10"
+              : "border-border bg-background",
         )}
       >
-        {proposalMode ? (
+        {presentationMode ? (
+          <Mic aria-hidden className="size-4 shrink-0 text-accent-foreground" />
+        ) : proposalMode ? (
           <FilePenLine
             aria-hidden
             className="size-4 shrink-0 text-opportunity"
@@ -204,9 +262,17 @@ export function AIChatPane({
         )}
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="truncate text-sm font-semibold text-foreground">
-            {proposalMode ? "提案モード" : "AIチャット"}
+            {presentationMode
+              ? "プレゼンモード"
+              : proposalMode
+                ? "提案モード"
+                : "AIチャット"}
           </h2>
-          {proposalMode ? (
+          {presentationMode ? (
+            <p className="truncate text-xs text-muted-foreground">
+              読み上げ原稿を整えています（スライドは作りません）
+            </p>
+          ) : proposalMode ? (
             <p className="truncate text-xs text-muted-foreground">
               通す相手と伝え方を固めています
             </p>
@@ -229,6 +295,18 @@ export function AIChatPane({
             通常に戻る
           </Button>
         ) : null}
+        {presentationMode ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onExitPresentationMode}
+            disabled={isBusy}
+          >
+            <X aria-hidden />
+            通常に戻る
+          </Button>
+        ) : null}
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -238,13 +316,29 @@ export function AIChatPane({
             <div
               className={cn(
                 "rounded-xl p-px",
-                proposalMode ? "bg-opportunity/25" : "bg-opportunity/15",
+                presentationMode
+                  ? "bg-accent/40"
+                  : proposalMode
+                    ? "bg-opportunity/25"
+                    : "bg-opportunity/15",
               )}
             >
               <Card size="sm" className="border-0 shadow-none">
                 <CardContent className="flex items-center gap-3 px-4 py-4">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-opportunity/15">
-                    {proposalMode ? (
+                  <div
+                    className={cn(
+                      "flex size-10 shrink-0 items-center justify-center rounded-lg",
+                      presentationMode
+                        ? "bg-accent/30"
+                        : "bg-opportunity/15",
+                    )}
+                  >
+                    {presentationMode ? (
+                      <Mic
+                        aria-hidden
+                        className="size-5 text-accent-foreground"
+                      />
+                    ) : proposalMode ? (
                       <FilePenLine
                         aria-hidden
                         className="size-5 text-opportunity"
@@ -258,14 +352,18 @@ export function AIChatPane({
                   </div>
                   <div className="flex flex-col gap-0.5">
                     <p className="text-sm font-semibold">
-                      {proposalMode
-                        ? "提案文書の作成を伴走します"
-                        : "上司役AIとの1on1"}
+                      {presentationMode
+                        ? "読み上げ原稿の作成を伴走します"
+                        : proposalMode
+                          ? "提案文書の作成を伴走します"
+                          : "上司役AIとの1on1"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {proposalMode
-                        ? "選択肢で答えながら、通る提案文に整えます"
-                        : "あなたの悩みや課題に、上司目線で伴走します"}
+                      {presentationMode
+                        ? "体験談は創作しません。見た場面を一緒に掘ります"
+                        : proposalMode
+                          ? "選択肢で答えながら、通る提案文に整えます"
+                          : "あなたの悩みや課題に、上司目線で伴走します"}
                     </p>
                   </div>
                 </CardContent>
@@ -292,10 +390,23 @@ export function AIChatPane({
                   key={message.id}
                   content={message.content}
                   timestamp={message.timestamp}
-                  onCopy={() => handleCopyProposal(message.content)}
+                  onCopy={() => handleCopyArtifact(message.content)}
                 />
               ) : message.kind === "proposal_question" ? (
                 <ProposalQuestionBubble
+                  key={message.id}
+                  content={message.content}
+                  timestamp={message.timestamp}
+                />
+              ) : message.kind === "presentation_script" ? (
+                <PresentationScriptBubble
+                  key={message.id}
+                  content={message.content}
+                  timestamp={message.timestamp}
+                  onCopy={() => handleCopyArtifact(message.content)}
+                />
+              ) : message.kind === "presentation_question" ? (
+                <PresentationQuestionBubble
                   key={message.id}
                   content={message.content}
                   timestamp={message.timestamp}
@@ -305,8 +416,8 @@ export function AIChatPane({
               ),
             )}
 
-            {/* 通常モードの進行操作（提案モード中は隠す） */}
-            {hasMessages && !isBusy && !proposalMode ? (
+            {/* 通常モードの進行操作（提案／プレゼン中は隠す） */}
+            {hasMessages && !isBusy && !facilitatorMode ? (
               <div className="flex flex-wrap gap-2 pl-11">
                 <Button
                   type="button"
@@ -338,10 +449,17 @@ export function AIChatPane({
               </div>
             ) : null}
 
-            {/* 提案モード: 選択肢（ストリーム完了後の未回答質問のみ） */}
+            {/* 提案／プレゼン: 選択肢（ストリーム完了後の未回答質問のみ） */}
             {latestProposalQuestion?.proposalCard ? (
-              <ProposalOptions
+              <FacilitatorOptions
                 card={latestProposalQuestion.proposalCard}
+                disabled={isBusy}
+                onSelect={handleSelectOption}
+              />
+            ) : null}
+            {latestPresentationQuestion?.presentationCard ? (
+              <FacilitatorOptions
+                card={latestPresentationQuestion.presentationCard}
                 disabled={isBusy}
                 onSelect={handleSelectOption}
               />
@@ -351,7 +469,13 @@ export function AIChatPane({
             {isLoading && (
               <StreamingBubble
                 content={streamingContent}
-                label={proposalMode ? "提案を整えています…" : "考えています…"}
+                label={
+                  presentationMode
+                    ? "原稿を整えています…"
+                    : proposalMode
+                      ? "提案を整えています…"
+                      : "考えています…"
+                }
               />
             )}
 
@@ -371,52 +495,43 @@ export function AIChatPane({
 
         {/* 入力エリア */}
         <div className="flex shrink-0 flex-col gap-3 border-t border-border bg-background p-4">
-          {/* 最新提案のピン留め */}
-          {latestProposalDocument ? (
-            <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-3">
-              <FilePenLine
-                aria-hidden
-                className="mt-0.5 size-4 shrink-0 text-opportunity"
-              />
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">
-                  最新の提案
-                </span>
-                <p className="line-clamp-2 text-sm text-foreground">
-                  {latestProposalDocument.content.split("\n")[0]}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  handleCopyProposal(latestProposalDocument.content)
-                }
-              >
-                {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
-                {copied ? "コピー済み" : "コピー"}
-              </Button>
-            </div>
+          {/* 成果物ピン（提案／原稿を1枠で切替） */}
+          {showArtifactPin ? (
+            <ArtifactPin
+              key={`${latestProposalDocument?.id ?? "none"}:${latestPresentationScript?.id ?? "none"}`}
+              defaultTab={defaultPinTab}
+              proposalDocument={latestProposalDocument}
+              presentationScript={latestPresentationScript}
+              copied={copied}
+              onCopy={handleCopyArtifact}
+            />
           ) : null}
 
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">
-              {proposalMode
-                ? "選択肢を選ぶか、自由に入力できます"
-                : "相談がまとまったら履歴に残せます"}
-            </span>
-            <div className="flex items-center gap-2">
-              {!proposalMode ? (
+          <div className="flex items-center justify-end gap-2">
+              {exitCta.showProposal ? (
                 <Button
                   type="button"
-                  variant={hasPendingActions ? "default" : "outline"}
+                  variant={exitCta.proposalEmphasized ? "default" : "outline"}
                   size="sm"
                   onClick={onStartProposalMode}
                   disabled={isBusy}
+                  title="書いて通す提案文書を作ります"
                 >
                   <FilePenLine aria-hidden />
                   提案を作る
+                </Button>
+              ) : null}
+              {canStartPresentation ? (
+                <Button
+                  type="button"
+                  variant="accent"
+                  size="sm"
+                  onClick={onStartPresentationMode}
+                  disabled={isBusy}
+                  title="話して通す読み上げ原稿を作ります（スライドは別）"
+                >
+                  <Mic aria-hidden />
+                  プレゼンを作る
                 </Button>
               ) : null}
               <AlertDialog
@@ -460,7 +575,6 @@ export function AIChatPane({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-            </div>
           </div>
 
           <InputGroup className="h-auto min-h-10 bg-background">
@@ -469,9 +583,11 @@ export function AIChatPane({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={
-                proposalMode
-                  ? "その他の回答を入力..."
-                  : "メッセージを入力してください..."
+                presentationMode
+                  ? "見た場面や心の声を入力..."
+                  : proposalMode
+                    ? "その他の回答を入力..."
+                    : "メッセージを入力してください..."
               }
               rows={2}
               aria-label="メッセージを入力"
@@ -509,8 +625,8 @@ export function AIChatPane({
             </InputGroupAddon>
           </InputGroup>
 
-          {/* grill-me カード（提案モード中は隠す） */}
-          {!proposalMode ? (
+          {/* grill-me カード（提案／プレゼン中は隠す） */}
+          {!facilitatorMode ? (
             <Button
               type="button"
               variant="accent"
@@ -543,12 +659,89 @@ export function AIChatPane({
   );
 }
 
-function ProposalOptions({
+function ArtifactPin({
+  defaultTab,
+  proposalDocument,
+  presentationScript,
+  copied,
+  onCopy,
+}: {
+  defaultTab: ArtifactPinTab;
+  proposalDocument: ChatMessage | null;
+  presentationScript: ChatMessage | null;
+  copied: boolean;
+  onCopy: (content: string) => void;
+}) {
+  const [pinTab, setPinTab] = useState<ArtifactPinTab>(defaultTab);
+  const activePinDocument =
+    pinTab === "script" ? presentationScript : proposalDocument;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
+      <div className="flex items-center gap-2">
+        {proposalDocument ? (
+          <Button
+            type="button"
+            variant={pinTab === "proposal" ? "default" : "outline"}
+            size="xs"
+            onClick={() => setPinTab("proposal")}
+          >
+            提案
+          </Button>
+        ) : null}
+        {presentationScript ? (
+          <Button
+            type="button"
+            variant={pinTab === "script" ? "default" : "outline"}
+            size="xs"
+            onClick={() => setPinTab("script")}
+          >
+            原稿
+          </Button>
+        ) : null}
+      </div>
+      {activePinDocument ? (
+        <div className="flex items-start gap-2">
+          {pinTab === "script" ? (
+            <Mic
+              aria-hidden
+              className="mt-0.5 size-4 shrink-0 text-accent-foreground"
+            />
+          ) : (
+            <FilePenLine
+              aria-hidden
+              className="mt-0.5 size-4 shrink-0 text-opportunity"
+            />
+          )}
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">
+              {pinTab === "script" ? "最新の読み上げ原稿" : "最新の提案"}
+            </span>
+            <p className="line-clamp-2 text-sm text-foreground">
+              {activePinDocument.content.split("\n")[0]}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onCopy(activePinDocument.content)}
+          >
+            {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+            {copied ? "コピー済み" : "コピー"}
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FacilitatorOptions({
   card,
   disabled,
   onSelect,
 }: {
-  card: ProposalQuestionCard;
+  card: ProposalQuestionCard | PresentationQuestionCard;
   disabled: boolean;
   onSelect: (label: string) => void;
 }) {
@@ -631,6 +824,78 @@ function ProposalDocumentBubble({
               <FilePenLine aria-hidden className="size-4 text-opportunity" />
               <span className="text-sm font-semibold text-foreground">
                 提案文書
+              </span>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={onCopy}>
+              <Copy aria-hidden />
+              コピー
+            </Button>
+          </div>
+          <CardContent className="p-4">
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+              {content}
+            </pre>
+          </CardContent>
+        </Card>
+        {timestamp ? (
+          <time className="text-xs text-muted-foreground">{timestamp}</time>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function PresentationQuestionBubble({
+  content,
+  timestamp,
+}: {
+  content: string;
+  timestamp?: string;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/30"
+        aria-hidden
+      >
+        <Mic className="size-4 text-accent-foreground" />
+      </div>
+      <div className="flex max-w-[82%] flex-col items-start gap-1">
+        <div className="rounded-2xl rounded-tl-sm bg-card px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-foreground ring-1 ring-border">
+          {content}
+        </div>
+        {timestamp ? (
+          <time className="text-xs text-muted-foreground">{timestamp}</time>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function PresentationScriptBubble({
+  content,
+  timestamp,
+  onCopy,
+}: {
+  content: string;
+  timestamp?: string;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/30"
+        aria-hidden
+      >
+        <Mic className="size-4 text-accent-foreground" />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between gap-2 border-b border-border bg-accent/20 px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <Mic aria-hidden className="size-4 text-accent-foreground" />
+              <span className="text-sm font-semibold text-foreground">
+                読み上げ原稿
               </span>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={onCopy}>

@@ -12,6 +12,7 @@
 import { neon } from "@neondatabase/serverless";
 import {
   landingCardSchema,
+  presentationQuestionCardSchema,
   proposalQuestionCardSchema,
   type ChatMessage,
   type Consultation,
@@ -414,6 +415,8 @@ function mapChatMessageKind(
     kind === "intent" ||
     kind === "proposal_question" ||
     kind === "proposal_document" ||
+    kind === "presentation_question" ||
+    kind === "presentation_script" ||
     kind === "text"
   ) {
     return kind;
@@ -428,7 +431,8 @@ function mapChatMessageIntent(
   if (
     intent === "perspective" ||
     intent === "actions" ||
-    intent === "proposal"
+    intent === "proposal" ||
+    intent === "presentation"
   ) {
     return intent;
   }
@@ -439,6 +443,7 @@ function mapChatMessageRow(r: Record<string, unknown>): ChatMessage {
   const kind = mapChatMessageKind(r.kind);
   let card: ChatMessage["card"] = undefined;
   let proposalCard: ChatMessage["proposalCard"] = undefined;
+  let presentationCard: ChatMessage["presentationCard"] = undefined;
 
   if (kind === "landing" && r.card != null) {
     const parsed = landingCardSchema.safeParse(r.card);
@@ -447,6 +452,10 @@ function mapChatMessageRow(r: Record<string, unknown>): ChatMessage {
   if (kind === "proposal_question" && r.card != null) {
     const parsed = proposalQuestionCardSchema.safeParse(r.card);
     if (parsed.success) proposalCard = parsed.data;
+  }
+  if (kind === "presentation_question" && r.card != null) {
+    const parsed = presentationQuestionCardSchema.safeParse(r.card);
+    if (parsed.success) presentationCard = parsed.data;
   }
 
   return {
@@ -459,6 +468,7 @@ function mapChatMessageRow(r: Record<string, unknown>): ChatMessage {
     kind,
     card,
     proposalCard,
+    presentationCard,
     intent: mapChatMessageIntent(r.intent),
   };
 }
@@ -494,7 +504,9 @@ export async function insertChatMessage(m: ChatMessage): Promise<void> {
       ? m.card
       : kind === "proposal_question" && m.proposalCard != null
         ? m.proposalCard
-        : null;
+        : kind === "presentation_question" && m.presentationCard != null
+          ? m.presentationCard
+          : null;
   const card = cardPayload != null ? JSON.stringify(cardPayload) : null;
   await sql`
     INSERT INTO chat_messages (
@@ -577,6 +589,15 @@ function parseTranscript(value: unknown): ChatMessage[] | undefined {
                 ? proposalQuestionCardSchema.safeParse(message.proposalCard)
                     .success
                   ? message.proposalCard
+                  : undefined
+                : undefined,
+            presentationCard:
+              message.kind === "presentation_question" &&
+              message.presentationCard != null
+                ? presentationQuestionCardSchema.safeParse(
+                    message.presentationCard,
+                  ).success
+                  ? message.presentationCard
                   : undefined
                 : undefined,
           },

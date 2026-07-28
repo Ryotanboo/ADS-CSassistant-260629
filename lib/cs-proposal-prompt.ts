@@ -4,6 +4,13 @@
  */
 
 import type { Consultation, Customer, NextAction } from "@/lib/cs-schema";
+import {
+  findProposalSessionStartIndex,
+  isProposalModeActive,
+} from "@/lib/cs-chat-mode";
+import { NO_FABRICATION_PROMPT_BLOCK } from "@/lib/cs-no-fabrication";
+
+export { findProposalSessionStartIndex, isProposalModeActive };
 
 const phaseLabel: Record<Customer["phase"], string> = {
   freeTrial: "フリートライアル",
@@ -53,15 +60,18 @@ export function buildProposalSystemPrompt(
 - あなたはこの人に話しかける。別の人名（例: 山田）で呼ばない
 - シードデータや「社内の担当CS」欄の名前を、顧客側の決裁者だと決めつけない
 
+${NO_FABRICATION_PROMPT_BLOCK}
+
 ## 集める材料（不足分だけ1問ずつ）
 ① 何を変えたいのか／何を通したいのか（提案の核）
 ② 決めるのは誰か（承認者・意思決定者）
 ③ その人の頭の中の問い（関心・不安）
-④ 根拠になる数字や事実（なければ体験談で代替可）
+④ 根拠になる数字や事実（なければ体験談で代替可。ただし創作禁止）
 
 未完了のネクストアクションがある場合は、それを①の仮置きとして扱い、重複して聞き直さない。
 すでに会話で分かっている材料は再質問せず、足りない分だけ確認する。
 ②の承認者は会話で確認する。顧客データ上の「社内の担当CS」は顧客側の承認者ではない。
+④で体験談が必要なとき、抽象語だけで済ませず、実際に見た場面を1問掘る。
 
 ## 対話ルール
 - 1問ずつ聞く。まとめて質問攻めにしない
@@ -69,7 +79,7 @@ export function buildProposalSystemPrompt(
 - ユーザーを否定せず伴走する。穴があるときは責めず、直す代替案をセットで示す
 - 「変える・やめる」提案は相手のメンツに配慮する（過去を正当化し、状況変化として語る）
 - やりとりの回数は固定しない。材料が揃ったら文書を出力する
-- ユーザーが「もう十分」「それで書いて」と言ったら、その時点で文書出力に進む
+- ユーザーが「もう十分」「それで書いて」と言ったら、その時点で文書出力に進む（ただし創作で穴埋めしない）
 - 未確認の人名を「〜様」で断定しない
 
 ## 最初の質問
@@ -126,43 +136,4 @@ ${formatConsultations(consultations)}
 
 ## FT勝ち筋サマリ（参考）
 ${formatFtSummary(customer)}`;
-}
-
-/** メッセージ配列から、直近の提案セッション開始位置を返す。なければ -1 */
-export function findProposalSessionStartIndex(
-  messages: { kind?: string; intent?: string }[],
-): number {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (message.kind === "intent" && message.intent === "proposal") {
-      return i;
-    }
-  }
-  return -1;
-}
-
-/** 提案モードがアクティブか（開始 intent 以降に document / 終了メッセージがなければ true） */
-export function isProposalModeActive(
-  messages: {
-    kind?: string;
-    intent?: string;
-    role?: string;
-    content?: string;
-  }[],
-): boolean {
-  const start = findProposalSessionStartIndex(messages);
-  if (start < 0) return false;
-
-  for (let i = start + 1; i < messages.length; i++) {
-    const message = messages[i];
-    if (message.kind === "proposal_document") return false;
-    if (
-      message.role === "assistant" &&
-      typeof message.content === "string" &&
-      message.content.startsWith("提案モードを終了しました")
-    ) {
-      return false;
-    }
-  }
-  return true;
 }

@@ -51,6 +51,7 @@ export const conversationIntentSchema = z.enum([
   "perspective",
   "actions",
   "proposal",
+  "presentation",
 ]);
 export type ConversationIntent = z.infer<typeof conversationIntentSchema>;
 
@@ -63,7 +64,7 @@ export type ProposalOption = z.infer<typeof proposalOptionSchema>;
 export const proposalAudienceSchema = z.enum(["customer", "internal"]);
 export type ProposalAudience = z.infer<typeof proposalAudienceSchema>;
 
-/** 提案モードの選択肢付き質問カード（landing の card とは別スキーマ） */
+/** 提案／プレゼン共通の選択肢付き質問カード（landing の card とは別スキーマ） */
 export const proposalQuestionCardSchema = z.object({
   options: z.array(proposalOptionSchema).min(1),
   recommended: z.string().optional(),
@@ -71,12 +72,23 @@ export const proposalQuestionCardSchema = z.object({
 });
 export type ProposalQuestionCard = z.infer<typeof proposalQuestionCardSchema>;
 
+/** プレゼンモードの選択肢カード（audience は使わない） */
+export const presentationQuestionCardSchema = z.object({
+  options: z.array(proposalOptionSchema).min(1),
+  recommended: z.string().optional(),
+});
+export type PresentationQuestionCard = z.infer<
+  typeof presentationQuestionCardSchema
+>;
+
 export const chatMessageKindSchema = z.enum([
   "text",
   "landing",
   "intent",
   "proposal_question",
   "proposal_document",
+  "presentation_question",
+  "presentation_script",
 ]);
 export type ChatMessageKind = z.infer<typeof chatMessageKindSchema>;
 
@@ -91,6 +103,8 @@ export const chatMessageSchema = z.object({
   card: landingCardSchema.optional(),
   /** kind === "proposal_question" のときのみ */
   proposalCard: proposalQuestionCardSchema.optional(),
+  /** kind === "presentation_question" のときのみ */
+  presentationCard: presentationQuestionCardSchema.optional(),
   intent: conversationIntentSchema.optional(),
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;

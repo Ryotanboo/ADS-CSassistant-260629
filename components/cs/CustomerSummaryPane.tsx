@@ -581,9 +581,13 @@ function ConsultationTranscriptDialog({
                       ? "提案文書"
                       : message.kind === "proposal_question"
                         ? "提案の問い"
-                        : message.role === "user"
-                          ? "担当CS"
-                          : "上司役AI"}
+                        : message.kind === "presentation_script"
+                          ? "読み上げ原稿"
+                          : message.kind === "presentation_question"
+                            ? "プレゼンの問い"
+                            : message.role === "user"
+                              ? "担当CS"
+                              : "上司役AI"}
                   {message.timestamp ? `・${message.timestamp}` : ""}
                 </span>
                 <p className="text-sm whitespace-pre-wrap text-foreground">
