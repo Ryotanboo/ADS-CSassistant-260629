@@ -4,8 +4,10 @@ import { useState } from "react";
 import {
   Archive,
   Calendar,
+  Check,
   ClipboardPaste,
   Clock,
+  Copy,
   Database,
   ExternalLink,
   MessageSquareText,
@@ -15,6 +17,7 @@ import {
 } from "lucide-react";
 
 import {
+  type ChatMessage,
   type Consultation,
   type Customer,
   type CustomerPhase,
@@ -540,11 +543,44 @@ function ConsultationMenu({
   );
 }
 
+function transcriptMessageLabel(message: ChatMessage): string {
+  if (message.kind === "intent") return "進行操作";
+  if (message.kind === "proposal_document") return "提案文書";
+  if (message.kind === "proposal_question") return "提案の問い";
+  if (message.kind === "presentation_script") return "読み上げ原稿";
+  if (message.kind === "presentation_question") return "プレゼンの問い";
+  if (message.role === "user") return "担当CS";
+  return "上司役AI";
+}
+
+function isCopyableArtifact(message: ChatMessage): boolean {
+  return (
+    message.kind === "proposal_document" ||
+    message.kind === "presentation_script"
+  );
+}
+
 function ConsultationTranscriptDialog({
   consultation,
 }: {
   consultation: Consultation;
 }) {
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  const handleCopyArtifact = async (message: ChatMessage) => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopiedMessageId(message.id);
+      window.setTimeout(() => {
+        setCopiedMessageId((current) =>
+          current === message.id ? null : current,
+        );
+      }, 2000);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <Dialog>
       <DialogTrigger
@@ -569,34 +605,39 @@ function ConsultationTranscriptDialog({
         </DialogHeader>
         <ScrollArea className="max-h-[60vh]">
           <div className="flex flex-col gap-3 pr-3">
-            {consultation.transcript?.map((message) => (
-              <div
-                key={message.id}
-                className="flex flex-col gap-1 rounded-lg bg-card p-3 ring-1 ring-border"
-              >
-                <span className="text-xs text-muted-foreground">
-                  {message.kind === "intent"
-                    ? "進行操作"
-                    : message.kind === "proposal_document"
-                      ? "提案文書"
-                      : message.kind === "proposal_question"
-                        ? "提案の問い"
-                        : message.kind === "presentation_script"
-                          ? "読み上げ原稿"
-                          : message.kind === "presentation_question"
-                            ? "プレゼンの問い"
-                            : message.role === "user"
-                              ? "担当CS"
-                              : "上司役AI"}
-                  {message.timestamp ? `・${message.timestamp}` : ""}
-                </span>
-                <p className="text-sm whitespace-pre-wrap text-foreground">
-                  {message.kind === "intent" && message.intent
-                    ? CONVERSATION_INTENT_LABELS[message.intent]
-                    : message.content}
-                </p>
-              </div>
-            ))}
+            {consultation.transcript?.map((message) => {
+              const copied = copiedMessageId === message.id;
+              return (
+                <div
+                  key={message.id}
+                  className="flex flex-col gap-1 rounded-lg bg-card p-3 ring-1 ring-border"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {transcriptMessageLabel(message)}
+                      {message.timestamp ? `・${message.timestamp}` : ""}
+                    </span>
+                    {isCopyableArtifact(message) ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => handleCopyArtifact(message)}
+                        aria-label={`${transcriptMessageLabel(message)}をコピー`}
+                      >
+                        {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+                        {copied ? "コピー済み" : "コピー"}
+                      </Button>
+                    ) : null}
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap text-foreground">
+                    {message.kind === "intent" && message.intent
+                      ? CONVERSATION_INTENT_LABELS[message.intent]
+                      : message.content}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </ScrollArea>
       </DialogContent>
