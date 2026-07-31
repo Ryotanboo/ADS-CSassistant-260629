@@ -7,6 +7,17 @@ import {
   isProposalModeActive,
 } from "@/lib/cs-chat-mode";
 import { parseChatMeta } from "@/lib/cs-chat-meta";
+import { buildProposalSystemPrompt } from "@/lib/cs-proposal-prompt";
+import type { Customer } from "@/lib/cs-schema";
+
+const sampleCustomer: Customer = {
+  id: "cust-test",
+  name: "株式会社テスト",
+  phase: "freeTrial",
+  contractStartDate: "2026年1月1日",
+  accountManager: "担当CS",
+  archived: false,
+};
 
 describe("isProposalModeActive", () => {
   it("returns false when proposal has not started", () => {
@@ -109,6 +120,20 @@ describe("isPresentationModeActive / getActiveChatMode", () => {
         },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("buildProposalSystemPrompt", () => {
+  it("branches customer and internal formats after audience selection", () => {
+    const prompt = buildProposalSystemPrompt(sampleCustomer);
+
+    expect(prompt).toContain("顧客向けフォーマット（audience=customer）");
+    expect(prompt).toContain("社内向けフォーマット（audience=internal）");
+    expect(prompt).toContain("◎ 次の進め方");
+    expect(prompt).toContain("社内文書を顧客向けへ転用しない");
+    expect(prompt).toContain(
+      "例外: audience=customer の提案文書では、末尾「◎ 次の進め方」の貴社／弊社だけ書いてよい",
+    );
   });
 });
 
