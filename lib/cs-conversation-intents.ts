@@ -3,7 +3,7 @@ import type { ConversationIntent } from "@/lib/cs-schema";
 export const CONVERSATION_INTENT_LABELS: Record<ConversationIntent, string> = {
   perspective: "別の視点を出す",
   actions: "打ち手を考える",
-  proposal: "提案を作る",
+  proposal: "提案文書を作る",
   presentation: "プレゼンを作る",
 };
 

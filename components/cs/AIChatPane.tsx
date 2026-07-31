@@ -518,7 +518,7 @@ export function AIChatPane({
                   title="書いて通す提案文書を作ります"
                 >
                   <FilePenLine aria-hidden />
-                  提案を作る
+                  提案文書を作る
                 </Button>
               ) : null}
               {canStartPresentation ? (
